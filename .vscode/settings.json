@@ -1,5 +1,11 @@
 {
     "python.analysis.extraPaths": [
         "./References"
-    ]
+    ],
+    "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+    "jupyter.kernels.preferred": "python3",
+    "[jupyter]": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe"
+    },
+    "python.analysis.autoImportCompletions": true
 }
