@@ -11,6 +11,7 @@ from engtoolkit.core.registry import Input, register_tool
 from engtoolkit.core.results import Result, rfield
 from engtoolkit.materials import FluidState, fluid
 
+from . import charts as _charts
 from .cooling_tower import CoolingTowerResult, cooling_tower
 from .cycles import RefrigerationCycleResult, refrigeration_cycle
 from .insulation import InsulationResult, insulated_pipe_heat_loss, insulation_thickness
@@ -44,7 +45,7 @@ class FluidPropertiesInputs(BaseModel):
 @register_tool("thermo.fluid_properties", "Fluid properties", FluidPropertiesInputs,
                description="State properties of any CoolProp fluid from any two inputs.",
                reference="CoolProp (Bell et al., 2014); validated against IAPWS-95 steam table values",
-               tags=("properties", "steam", "refrigerant"))
+               tags=("properties", "steam", "refrigerant"), charts=_charts.fluid_properties_charts)
 def fluid_properties_tool(inp: FluidPropertiesInputs) -> FluidState:
     return fluid(inp.fluid).state(**{inp.input_1: inp.value_1, inp.input_2: inp.value_2})
 
@@ -69,7 +70,7 @@ class SaturatedTableInputs(BaseModel):
 @register_tool("thermo.saturated_steam_table", "Saturated steam table", SaturatedTableInputs,
                description="Saturated water/steam table by temperature or pressure (°C, kPa, kJ/kg).",
                reference="IAPWS-95 / IAPWS-IF97 via CoolProp; checked against Cengel & Boles Table A-4",
-               tags=("steam", "table"))
+               tags=("steam", "table"), charts=_charts.saturated_table_charts)
 def saturated_steam_table_tool(inp: SaturatedTableInputs) -> TableResult:
     import numpy as np
     values = np.linspace(inp.start, inp.stop, inp.points)
@@ -105,7 +106,7 @@ class PipePressureDropInputs(BaseModel):
 @register_tool("thermo.pipe_pressure_drop", "Pipe pressure drop", PipePressureDropInputs,
                description="Friction (Colebrook), fittings (Crane K = f_T·L/D) and elevation pressure drop.",
                reference="Crane TP-410; Colebrook (1939); checked against Haaland explicit friction factor",
-               tags=("pipe", "pressure drop", "fluids"))
+               tags=("pipe", "pressure drop", "fluids"), charts=_charts.pipe_pressure_drop_charts)
 def pipe_pressure_drop_tool(inp: PipePressureDropInputs) -> PipeDropResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     fittings = {name: getattr(inp, field) for name, field in FITTING_FIELDS.items()}
@@ -134,7 +135,7 @@ class InsulationThicknessInputs(_InsulationBase):
 @register_tool("thermo.insulation_thickness", "Insulation thickness", InsulationThicknessInputs,
                description="Minimum insulation thickness for a target heat loss per metre of pipe.",
                reference="EN ISO 12241; Incropera ch. 3 & 9 (Churchill-Chu natural convection + radiation)",
-               tags=("insulation", "heat loss"))
+               tags=("insulation", "heat loss"), charts=_charts.insulation_thickness_charts)
 def insulation_thickness_tool(inp: InsulationThicknessInputs) -> InsulationResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     return insulation_thickness(size.id, size.od, inp.T_fluid, inp.T_ambient, inp.q_max, inp.insulation,
@@ -148,7 +149,7 @@ class InsulationHeatLossInputs(_InsulationBase):
 @register_tool("thermo.insulation_heat_loss", "Insulated pipe heat loss", InsulationHeatLossInputs,
                description="Heat loss and surface temperature for a given insulation thickness.",
                reference="EN ISO 12241; Incropera ch. 3 & 9 (Churchill-Chu natural convection + radiation)",
-               tags=("insulation", "heat loss"))
+               tags=("insulation", "heat loss"), charts=_charts.insulation_charts)
 def insulation_heat_loss_tool(inp: InsulationHeatLossInputs) -> InsulationResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     return insulated_pipe_heat_loss(size.id, size.od, inp.thickness, inp.T_fluid, inp.T_ambient, inp.insulation,
@@ -170,7 +171,7 @@ class RefrigerationCycleInputs(BaseModel):
 @register_tool("thermo.refrigeration_cycle", "Refrigeration / heat pump cycle", RefrigerationCycleInputs,
                description="Single-stage vapour-compression cycle: COP, capacities and states.",
                reference="Cengel & Boles, Thermodynamics, ch. 11; energy balance check",
-               tags=("heat pump", "refrigeration", "cycle"))
+               tags=("heat pump", "refrigeration", "cycle"), charts=_charts.refrigeration_cycle_charts)
 def refrigeration_cycle_tool(inp: RefrigerationCycleInputs) -> RefrigerationCycleResult:
     return refrigeration_cycle(inp.refrigerant, inp.T_evap, inp.T_cond, inp.compressor_power,
                                inp.isentropic_efficiency, inp.superheat, inp.subcooling)
