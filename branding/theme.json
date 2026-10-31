@@ -1,0 +1,39 @@
+{
+  "name": "AA Engineering Toolkit",
+  "brand": {
+    "primary": "#4F46E5",
+    "accent": "#06B6D4",
+    "gradient": ["#4F46E5", "#06B6D4"]
+  },
+  "disciplines": {
+    "thermo": "#F97316",
+    "structural": "#0EA5E9",
+    "electrical": "#22C55E",
+    "asme": "#A855F7"
+  },
+  "light": {
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "border": "#E2E8F0",
+    "text": "#0F172A",
+    "muted": "#64748B"
+  },
+  "dark": {
+    "background": "#0B1120",
+    "surface": "#111827",
+    "border": "#1F2937",
+    "text": "#E2E8F0",
+    "muted": "#94A3B8"
+  },
+  "status": {
+    "ok": "#16A34A",
+    "warning": "#F59E0B",
+    "fail": "#DC2626"
+  },
+  "fonts": {
+    "ui": "Inter",
+    "numeric": "JetBrains Mono"
+  },
+  "radius": "0.75rem",
+  "chart_colors": ["#4F46E5", "#06B6D4", "#F97316", "#22C55E", "#A855F7", "#EC4899", "#0EA5E9", "#EAB308"]
+}

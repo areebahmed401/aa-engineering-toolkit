@@ -1,22 +1,32 @@
-# Engineering Toolkit (Jupyter)
+<p align="center">
+  <img src="branding/aa-wordmark.svg" alt="AA Engineering Toolkit" width="420">
+</p>
 
 *Areeb Ahmed | Mechanical Engineer*
 
 Engineering notebooks for structural, thermofluids and ASME code calculations, backed by a small
 Python library (`utils`) that the notebooks import.
 
+> **Disclaimer:** this toolkit is for learning, estimation and preliminary design. It is not a
+> substitute for design by a qualified engineer or for checks against the current edition of the
+> applicable codes and standards (ASME, API, EN, etc.). Verify every result before relying on it.
+
 ## Contents
 
 | Folder | What's in it |
 |---|---|
 | `0. overview.ipynb` | Index of the toolkit |
-| `1. Structural/` | Statics (FBD, FEM and determinate solvers), bending, torsion & warping, plus outlines for shear-flexible beams, buckling and Maxwell-Mohr. `RWTH/` holds course examples |
+| `1. Structural/` | Statics (FBD, FEM and determinate solvers), bending, torsion & warping, plus outlines for shear-flexible beams, buckling and Maxwell-Mohr |
 | `2. Fluids/` | Pipe sizing: Darcy-Weisbach with Crane TP-410 fittings, velocity / pressure drop / cost vs pipe size |
 | `3. ASME/` | Notes on ASME VIII Div 1 pressure vessels and B31.3 process piping |
 | `utils/Appendix/` | The library: materials, unit converters, formulas, `structural/` (sections, loads, solvers, torsion) and `thermofluids/` (pipe flow, refrigeration cycle, cooling tower, insulation, p-h / T-s diagrams) |
 | `utils/Catalogs/` | CSV data: Sch 40 pipe sizes and costs, fittings, valves, Crane L/D values |
-| `Images/`, `Resources/` | Diagrams and reference documents |
+| `Images/` | Diagrams used by the notebooks |
+| `branding/` | Logo, theme colours (`theme.json`) and matplotlib style (`aa.mplstyle`) |
 | `tests/` | Unit tests that check the library against textbook results |
+
+Reference documents (codes, standards, vendor catalogues) are not distributed with this repo.
+Keep your own copies in a local `references/` folder, which git ignores.
 
 Units are SI throughout (m, N, Pa, K unless a name says otherwise).
 
@@ -62,3 +72,7 @@ pytest --nbmake "0. overview.ipynb" "1. Structural" "2. Fluids" "3. ASME"   # ev
 ```
 
 Both run on GitHub Actions for every push.
+
+## License
+
+[MIT](LICENSE) © 2026 Areeb Ahmed
