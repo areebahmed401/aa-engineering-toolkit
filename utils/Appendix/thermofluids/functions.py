@@ -1,19 +1,6 @@
 import math
-from .constants import PIPE_THERMAL_CONDUCTIVITY
-
-def colebrook_white(Re, roughness, D):
-    epsilon_D = roughness / D
-    f = 0.001
-    max_iter, tol = 5000, 1e-6
-    if Re <= 2300 and Re > 0:
-        return 64.0 / Re
-    for _ in range(max_iter):
-        lhs = 1 / math.sqrt(f)
-        rhs = -2 * math.log10((epsilon_D / 3.7) + (2.51 / (Re * math.sqrt(f))))
-        if abs(lhs - rhs) < tol:
-            break
-        f = 1 / (rhs ** 2)
-    return f
+from ..constants import PIPE_THERMAL_CONDUCTIVITY
+from ..formulas import colebrook_white
 
 def convert_headtombar(h, density):
     return 9.81 * density * h / 100.0
@@ -38,30 +25,52 @@ def get_equivalent_length(fittings, diameter):
             breakdown[k] = 0.0
     return Le_total, breakdown
 
-def calc_insulation_thickness(d, T_fluid_c, T_atm_c, q_max, k_ins, pipe_material="Carbon Steel"):
-    """Calculate required insulation thickness considering pipe material conductivity."""
-    deltaT = T_fluid_c - T_atm_c
-    if deltaT <= 0:
+def insulated_pipe_heat_loss(d_in, d_out, t_ins, T_fluid_c, T_atm_c, k_ins,
+                             pipe_material="Carbon Steel", h_out=10.0):
+    """
+    Heat loss per metre [W/m] of an insulated pipe from series resistances:
+    pipe wall conduction + insulation conduction + outer surface convection.
+    The inner wall is assumed at the fluid temperature.
+
+    d_in, d_out : pipe inner / outer diameter [m]
+    t_ins       : insulation thickness [m]
+    k_ins       : insulation conductivity [W/m·K]
+    h_out       : outer surface heat transfer coefficient [W/m²·K]
+    """
+    k_pipe = PIPE_THERMAL_CONDUCTIVITY.get(pipe_material, 45.0)  # Default to Carbon Steel if unknown
+    r1, r2 = d_in / 2.0, d_out / 2.0
+    r3 = r2 + t_ins
+    R_pipe = math.log(r2 / r1) / (2 * math.pi * k_pipe)
+    R_ins = math.log(r3 / r2) / (2 * math.pi * k_ins)
+    R_conv = 1 / (h_out * 2 * math.pi * r3)
+    return (T_fluid_c - T_atm_c) / (R_pipe + R_ins + R_conv)
+
+def calc_insulation_thickness(d_in, d_out, T_fluid_c, T_atm_c, q_max, k_ins,
+                              pipe_material="Carbon Steel", h_out=10.0, t_max=0.5):
+    """
+    Minimum insulation thickness [mm] that keeps the heat loss at or below q_max [W/m].
+    Solved by bisection on insulated_pipe_heat_loss. Returns 0 if the bare pipe already
+    meets q_max and inf if even t_max [m] is not enough.
+    """
+    if T_fluid_c - T_atm_c <= 0:
         return 0.0
-    
-    try:
-        # Get pipe thermal conductivity
-        k_pipe = PIPE_THERMAL_CONDUCTIVITY.get(pipe_material, 45.0)  # Default to Carbon Steel if unknown
-        
-        r1 = d / 2.0  # Pipe outer radius
-        
-        # Calculate composite thermal resistance using pipe and insulation
-        exponent = (2.0 * math.pi * deltaT) / q_max
-        denominator = (1/k_pipe + 1/k_ins)
-        
-        if exponent/denominator > 700:
-            return float('inf')
-            
-        r2 = r1 * math.exp(exponent/denominator)
-        return max(0.0, (r2 - r1) * 1000.0)  # Convert to mm
-        
-    except Exception:
-        return float('nan')
+
+    def loss(t):
+        return insulated_pipe_heat_loss(d_in, d_out, t, T_fluid_c, T_atm_c, k_ins, pipe_material, h_out)
+
+    if loss(0.0) <= q_max:
+        return 0.0
+    if loss(t_max) > q_max:
+        return float('inf')
+
+    lo, hi = 0.0, t_max
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        if loss(mid) > q_max:
+            lo = mid
+        else:
+            hi = mid
+    return hi * 1000.0  # mm
 
 import CoolProp.CoolProp as CP
 import math
@@ -233,11 +242,17 @@ def psychrometric_properties(t_dry, RH, altitude):
 def cooling_tower_performance(Q_kW, Cp_water, t_in, t_wet, approach):
     t_out = t_wet + approach
     delta_T = t_in - t_out
+    if delta_T <= 0:
+        raise ValueError(
+            f"Hot water inlet ({t_in} °C) must be above wet bulb + approach ({t_out:.1f} °C)"
+        )
     m_dot = Q_kW / (Cp_water * delta_T)  # kg/s
     effectiveness = delta_T / (delta_T + approach)
     return m_dot, effectiveness, delta_T, t_out
 
 def cooling_tower_losses(m_dot, delta_T, CoC):
+    if CoC <= 1:
+        raise ValueError("Cycles of concentration must be greater than 1")
     m_dot_hr = m_dot * 3600
     evap_loss = 0.00085 * m_dot_hr * delta_T
     drift_loss = 0.002 * m_dot_hr
@@ -245,69 +260,8 @@ def cooling_tower_losses(m_dot, delta_T, CoC):
     return evap_loss, drift_loss, blowdown_loss
 
 import CoolProp.CoolProp as CP
+from .Ref_Cycle import get_refrigeration_cycle
 
-def get_refrigeration_cycle( refrigerant, t_evap, t_cond, comp_power):
-    
-    t_evap = t_evap + 273.15
-    t_cond = t_cond + 273.15
-    
-    try:
-        p_evap = CP.PropsSI('P', 'T', t_evap, 'Q', 0, refrigerant) 
-        p_cond = CP.PropsSI('P', 'T', t_cond, 'Q', 0, refrigerant)
-        t_1 = t_evap
-        p_1 = p_evap
-        h_1 = CP.PropsSI('H', 'P', p_evap, 'Q', 1, refrigerant)
-        s_1 = CP.PropsSI('S', 'P', p_evap, 'Q', 1, refrigerant)
-
-        s_2 = s_1 + 100
-        p_2 = p_cond
-        h_2 = CP.PropsSI('H', 'S', s_2, 'P', p_cond, refrigerant)
-        t_2 = CP.PropsSI('T', 'P', p_cond, 'S', s_2, refrigerant)
-        
-        p_2x =p_2
-        h_2x = CP.PropsSI('H', 'P', p_2x, 'Q', 1, refrigerant)
-        s_2x = CP.PropsSI('S', 'P', p_2x, 'Q', 1, refrigerant)
-        t_2x = CP.PropsSI('T', 'P', p_2x, 'Q', 1, refrigerant)
-
-        h_3 = CP.PropsSI('H', 'P', p_cond, 'Q', 0, refrigerant)
-        s_3 = CP.PropsSI('S', 'P', p_cond, 'Q', 0, refrigerant)
-        t_3 = t_cond
-        p_3 = p_cond
-
-        h_4 = h_3
-        q_4 = CP.PropsSI('Q', 'P', p_cond, 'H', h_4, refrigerant) 
-        p_4 = p_evap
-        t_4 = t_evap
-        s_4 = CP.PropsSI('S', 'P', p_evap, 'Q', q_4, refrigerant)
-        
-        
-        p_1 = p_1 / 1000
-        p_2 = p_2 / 1000
-        p_2x = p_2x / 1000
-        p_3 = p_3 / 1000
-        p_4 = p_4 / 1000
-        h_1 = h_1 / 1000
-        h_2 = h_2 / 1000
-        h_2x = h_2x / 1000
-        h_3 = h_3 / 1000
-        h_4 = h_4 / 1000
-        s_1 = s_1 / 1000
-        s_2 = s_2 / 1000
-        s_2x = s_2x / 1000
-        s_3 = s_3 / 1000
-        s_4 = s_4 / 1000
-        
-        COP= (h_2-h_3)/(h_2-h_1)
-        rdot = comp_power / (h_2 - h_1) #kg/s
-        heat_load = rdot *(h_2 - h_3) #kW
-        cooling_load = rdot *(h_1 - h_4) #kW
-        temp_lift = t_cond - t_evap #K
-
-        return p_evap, p_cond, t_1, p_1, h_1, s_1, s_2, t_2, p_2, h_2,s_2x, t_2x, p_2x, h_2x, h_3, s_3, t_3, p_3, h_4, p_4, t_4, s_4, COP, rdot, heat_load, cooling_load, temp_lift
-    except ValueError:
-        
-        return 'Values not in range'
-    
 def get_environmental_ratings(refrigerant):
     if refrigerant.lower() == "water":
         return "Water has no environmental impact"
@@ -315,7 +269,7 @@ def get_environmental_ratings(refrigerant):
         try:
             gwp_100 = CP.PropsSI('GWP100', refrigerant)
             gwp_20 = CP.PropsSI('GWP20', refrigerant)
-            odp = CP.PropsSI('GWP20', refrigerant)
+            odp = CP.PropsSI('ODP', refrigerant)
             environmental_ratings = f"GWP100: {gwp_100}, GWP20: {gwp_20}, ODP: {odp}"
         except ValueError:
             environmental_ratings = "No environmental ratings available"

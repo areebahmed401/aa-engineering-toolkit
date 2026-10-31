@@ -1,2 +1,17 @@
 #virtual environments
 venv/
+.venv/
+env/
+
+# python caches
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# jupyter
+.ipynb_checkpoints/
+
+# build output (PyInstaller etc.)
+build/
+dist/

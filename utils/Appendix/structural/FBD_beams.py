@@ -12,6 +12,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --------------------- LOAD DEFINITIONS ---------------------
+# Sign convention (SI units):
+# - P and w are positive DOWNWARD [N], [N/m]
+# - M is positive COUNTER-CLOCKWISE [N·m]
+# - Deflection v is positive upward, sagging bending moment is positive
 class Load:
     pass
 
@@ -31,22 +35,24 @@ class MomentLoad(Load):
         self.M = M
         self.x = x
 
-# ------------------- END CONDITIONS  (x, y theta)-----------------------
+# ------------------- END CONDITIONS -----------------------
+# Beam nodes have two DOFs: 0 = transverse deflection v, 1 = rotation theta.
+# Axial DOFs are not modelled.
 class EndCondition:
     def constrained_dofs(self):
         return []
 
 class Fixed(EndCondition):
     def constrained_dofs(self):
-        return [0, 1, 2]  # x, y, theta
+        return [0, 1]  # v and theta
 
 class Pinned(EndCondition):
     def constrained_dofs(self):
-        return [0, 2]  # x, theta (y is free)
+        return [0]  # v only, free to rotate
 
 class Roller(EndCondition):
     def constrained_dofs(self):
-        return [1]  # y only (x and theta are free)
+        return [0]  # v only (axial movement free)
 
 class Free(EndCondition):
     def constrained_dofs(self):
@@ -89,11 +95,10 @@ def static_determinacy(beam):
         raise ValueError("Beam end conditions not set")
 
     def reactions(end):
-        from FBD_beams import Fixed, Pinned, Roller
         if isinstance(end, Fixed):
-            return 3    # V + M
+            return 3    # H + V + M
         if isinstance(end, Pinned):
-            return 2    # V only
+            return 2    # H + V
         if isinstance(end, Roller):
             return 1    # V only
         return 0

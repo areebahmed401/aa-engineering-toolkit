@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engineering-toolkit"
+version = "0.1.0"
+description = "Engineering toolkit: structural, thermofluids and ASME calculations used by the notebooks"
+authors = [{ name = "Areeb Ahmed" }]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "CoolProp",
+    "PsychroLib",
+]
+
+[tool.setuptools.packages.find]
+include = ["utils*"]
+
+[tool.setuptools.package-data]
+utils = ["Catalogs/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

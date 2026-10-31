@@ -164,11 +164,8 @@ def plot_flashing_process(p1,p2,t1,fluid='Water'):
     T_final = CP.PropsSI('T', 'P', p2 * 1e6, 'S', s_final*1000, 'Water')  # Final temperature (K)
     
     plot_processes(p1,p2,h_initial,h_final,t1,T_final,s_initial,s_final, fluid)
-    
-    
-#Flashing process    
-plot_flashing_process(0.4,0.08,417)
 
-# Example usage (uncomment the following line to run the example)
-# plot_saturated_lines('Ammonia')
-# plt.show()
+
+if __name__ == "__main__":
+    # Flashing process example
+    plot_flashing_process(0.4, 0.08, 417)
