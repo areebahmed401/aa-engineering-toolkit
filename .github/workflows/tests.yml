@@ -34,3 +34,45 @@ jobs:
 
       - name: Package builds
         run: python -m build --wheel
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Build Python assets
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python scripts/build_web_assets.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install, type-check, unit test, build
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Every tool runs in a real browser (Pyodide)
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
