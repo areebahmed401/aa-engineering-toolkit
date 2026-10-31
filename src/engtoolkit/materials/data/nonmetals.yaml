@@ -1,0 +1,32 @@
+# Polymers, composites and construction materials. SI units.
+materials:
+  - name: PVC
+    family: polymer
+    aliases: [uPVC]
+    source: Typical rigid PVC values; roughness per Moody chart (drawn tubing)
+    mechanical: {E: 3.0e9, nu: 0.38, rho: 1400, ultimate_strength: 50e6}
+    thermal: {k: 0.19, cp: 1000, alpha: 70e-6, emissivity: 0.9, max_service_T_C: 60}
+    surface: {roughness: 1.5e-6}
+
+  - name: HDPE
+    family: polymer
+    aliases: [PE100]
+    source: Typical PE100 pipe-grade values
+    mechanical: {E: 1.0e9, nu: 0.42, rho: 955, yield_strength: 25e6}
+    thermal: {k: 0.45, cp: 1900, alpha: 150e-6, emissivity: 0.9, max_service_T_C: 60}
+    surface: {roughness: 7e-6}
+
+  - name: CFRP
+    family: composite
+    aliases: [Carbon fibre composite]
+    source: Quasi-isotropic carbon/epoxy laminate, typical values
+    mechanical: {E: 150e9, nu: 0.25, rho: 1600, yield_strength: 600e6, ultimate_strength: 800e6}
+    thermal: {k: 5, cp: 1100, alpha: 2e-6}
+
+  - name: Concrete
+    family: construction
+    aliases: [Concrete C30/37]
+    source: EN 1992-1-1 (C30/37 mean modulus); roughness per Moody chart
+    mechanical: {E: 33e9, nu: 0.2, rho: 2400, ultimate_strength: 30e6}
+    thermal: {k: 1.4, cp: 880, alpha: 10e-6, emissivity: 0.9}
+    surface: {roughness: 3e-4}

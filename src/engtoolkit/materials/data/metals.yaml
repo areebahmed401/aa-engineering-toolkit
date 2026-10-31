@@ -1,0 +1,82 @@
+# Metals. SI units. Curves: {T_C: [...], value: [...]}.
+# Typical/nominal values for preliminary design. For code calculations use the values
+# of the governing standard (e.g. ASME II-D allowables entered under `allowables`).
+materials:
+  - name: Steel
+    family: metal
+    aliases: [Structural steel, Mild steel]
+    source: Generic textbook values (Gere & Goodno, Mechanics of Materials)
+    mechanical: {E: 200e9, nu: 0.3, rho: 7850, yield_strength: 250e6, ultimate_strength: 400e6}
+    thermal: {k: 50, cp: 470, alpha: 12e-6, emissivity: 0.8}
+    surface: {roughness: 4.5e-5}
+    electrical: {resistivity: 1.7e-7}
+
+  - name: S355
+    family: metal
+    aliases: [S355JR, Steel S355]
+    source: EN 10025-2 nominal values (t <= 16 mm); E per EN 1993-1-1
+    mechanical: {E: 210e9, nu: 0.3, rho: 7850, yield_strength: 355e6, ultimate_strength: 470e6}
+    thermal: {k: 50, cp: 470, alpha: 12e-6, emissivity: 0.8}
+    surface: {roughness: 4.5e-5}
+
+  - name: ASTM A106B
+    family: metal
+    aliases: [Carbon Steel, A106 Grade B, A106B]
+    source: ASTM A106 minimum strengths; thermal properties typical of carbon steel (Incropera, Table A.1)
+    mechanical:
+      E: {T_C: [20, 100, 200, 300, 400], value: [207e9, 203e9, 196e9, 189e9, 179e9]}
+      nu: 0.3
+      rho: 7850
+      yield_strength: 240e6
+      ultimate_strength: 415e6
+    thermal:
+      k: {T_C: [20, 100, 200, 300, 400], value: [50, 49, 47, 44, 41]}
+      cp: 480
+      alpha: 11.7e-6
+      emissivity: 0.8
+      max_service_T_C: 425
+    surface: {roughness: 4.5e-5}
+
+  - name: SS304
+    family: metal
+    aliases: [Stainless Steel, AISI 304, 304 stainless]
+    source: Typical AISI 304 values (Incropera, Table A.1; ASM Handbook)
+    mechanical:
+      E: {T_C: [20, 100, 200, 300, 400], value: [193e9, 189e9, 183e9, 176e9, 169e9]}
+      nu: 0.3
+      rho: 8000
+      yield_strength: 215e6
+      ultimate_strength: 505e6
+    thermal:
+      k: {T_C: [20, 100, 300, 500], value: [14.9, 16.2, 19.0, 21.5]}
+      cp: 500
+      alpha: 17.3e-6
+      emissivity: 0.3
+    surface: {roughness: 1.5e-5}
+    electrical: {resistivity: 7.2e-7}
+
+  - name: Aluminum
+    family: metal
+    aliases: [Aluminium, Al 6061-T6, 6061-T6]
+    source: Typical 6061-T6 values (ASM Handbook)
+    mechanical: {E: 70e9, nu: 0.3, rho: 2700, yield_strength: 150e6, ultimate_strength: 300e6}
+    thermal: {k: 167, cp: 896, alpha: 23.6e-6, emissivity: 0.1}
+    surface: {roughness: 1.5e-6}
+    electrical: {resistivity: 4.0e-8}
+
+  - name: Copper
+    family: metal
+    aliases: [Cu, C11000]
+    source: Typical annealed C11000 values (Incropera, Table A.1)
+    mechanical: {E: 117e9, nu: 0.33, rho: 8933, yield_strength: 70e6, ultimate_strength: 220e6}
+    thermal: {k: 401, cp: 385, alpha: 16.5e-6, emissivity: 0.05}
+    surface: {roughness: 1.5e-6}
+    electrical: {resistivity: 1.72e-8}
+
+  - name: Cast Iron
+    family: metal
+    aliases: [Grey cast iron]
+    source: Typical grey cast iron values; roughness per Moody chart
+    mechanical: {E: 100e9, nu: 0.26, rho: 7200, ultimate_strength: 200e6}
+    thermal: {k: 50, cp: 460, alpha: 10.5e-6, emissivity: 0.8}
+    surface: {roughness: 2.6e-4}

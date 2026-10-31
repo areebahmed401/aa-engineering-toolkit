@@ -3,23 +3,95 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "engineering-toolkit"
-version = "0.1.0"
-description = "Engineering toolkit: structural, thermofluids and ASME calculations used by the notebooks"
+name = "aa-engineering-toolkit"
+dynamic = ["version"]
+description = "AA Engineering Toolkit: thermodynamics & fluids, structural, electrical and ASME calculations"
+readme = "README.md"
+license = "MIT"
 authors = [{ name = "Areeb Ahmed" }]
 requires-python = ">=3.11"
+# Core dependencies must all be available in Pyodide so the web app can run the package in the browser.
 dependencies = [
     "numpy",
+    "scipy",
+    "pandas",
     "matplotlib",
-    "CoolProp",
+    "CoolProp>=7",
     "PsychroLib",
+    "pydantic>=2",
+    "pint",
+    "pyyaml",
 ]
 
+[project.optional-dependencies]
+notebook = ["ipykernel", "ipywidgets"]
+battery = ["pybamm"]  # not available in the browser; imported lazily
+dev = ["pytest", "nbmake", "import-linter", "ruff", "build"]
+
+[project.urls]
+Homepage = "https://github.com/areebahmed401/aa-engineering-toolkit"
+
+[tool.setuptools.dynamic]
+version = { attr = "engtoolkit.__version__" }
+
 [tool.setuptools.packages.find]
-include = ["utils*"]
+where = ["src"]
+include = ["engtoolkit*"]
 
 [tool.setuptools.package-data]
-utils = ["Catalogs/*.csv"]
+engtoolkit = ["**/*.csv", "**/*.yaml", "**/*.mplstyle", "**/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501", "E731", "E741", "F401"]
+
+# ---------------- dependency layers ----------------
+# core <- materials, catalogs <- thermo <- electrical
+#                              <- structural <- asme
+[tool.importlinter]
+root_package = "engtoolkit"
+
+[[tool.importlinter.contracts]]
+name = "core depends on nothing else in the toolkit"
+type = "forbidden"
+source_modules = ["engtoolkit.core"]
+forbidden_modules = ["engtoolkit.materials", "engtoolkit.catalogs", "engtoolkit.thermo",
+                     "engtoolkit.structural", "engtoolkit.electrical", "engtoolkit.asme"]
+
+[[tool.importlinter.contracts]]
+name = "materials and catalogs are shared foundations"
+type = "forbidden"
+source_modules = ["engtoolkit.materials", "engtoolkit.catalogs"]
+forbidden_modules = ["engtoolkit.thermo", "engtoolkit.structural", "engtoolkit.electrical", "engtoolkit.asme"]
+
+[[tool.importlinter.contracts]]
+name = "thermo does not depend on other disciplines"
+type = "forbidden"
+source_modules = ["engtoolkit.thermo"]
+forbidden_modules = ["engtoolkit.structural", "engtoolkit.electrical", "engtoolkit.asme"]
+
+[[tool.importlinter.contracts]]
+name = "structural does not depend on other disciplines"
+type = "forbidden"
+source_modules = ["engtoolkit.structural"]
+forbidden_modules = ["engtoolkit.thermo", "engtoolkit.electrical", "engtoolkit.asme"]
+
+[[tool.importlinter.contracts]]
+name = "electrical may use thermo but not structural or asme"
+type = "forbidden"
+source_modules = ["engtoolkit.electrical"]
+forbidden_modules = ["engtoolkit.structural", "engtoolkit.asme"]
+
+[[tool.importlinter.contracts]]
+name = "asme may use structural but not thermo or electrical"
+type = "forbidden"
+source_modules = ["engtoolkit.asme"]
+forbidden_modules = ["engtoolkit.thermo", "engtoolkit.electrical"]

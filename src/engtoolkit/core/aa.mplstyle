@@ -1,0 +1,32 @@
+# AA Engineering Toolkit matplotlib style (colours from branding/theme.json)
+# Use in a notebook:  plt.style.use("../branding/aa.mplstyle")
+
+axes.prop_cycle : cycler('color', ['4F46E5', '06B6D4', 'F97316', '22C55E', 'A855F7', 'EC4899', '0EA5E9', 'EAB308'])
+axes.facecolor  : FFFFFF
+axes.edgecolor  : CBD5E1
+axes.labelcolor : 0F172A
+axes.titlesize  : 13
+axes.titleweight: semibold
+axes.labelsize  : 11
+axes.grid       : True
+axes.spines.top : False
+axes.spines.right : False
+
+grid.color      : E2E8F0
+grid.linestyle  : -
+grid.linewidth  : 0.8
+
+lines.linewidth : 2.2
+lines.markersize: 6
+
+xtick.color     : 475569
+ytick.color     : 475569
+text.color      : 0F172A
+
+figure.facecolor: FFFFFF
+figure.dpi      : 110
+figure.autolayout : True
+
+legend.frameon  : False
+font.family     : sans-serif
+font.sans-serif : Inter, Segoe UI, DejaVu Sans, Arial
