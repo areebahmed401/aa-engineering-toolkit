@@ -7,9 +7,9 @@ Provides a function to calculate the weight per meter (kg/m)
 of Schedule 40 carbon steel pipes for standard DN sizes.
 
 Usage:
-    from sch40_pipe_weights import pipe_weight_per_m
+    from utils.Appendix.thermofluids.pipe_weight_calc import pipe_mass_per_m
 
-    weight = pipe_weight_per_m(100)   # DN100
+    weight = pipe_mass_per_m(100)   # DN100
     print(weight)   # e.g., 16.1 kg/m
 """
 

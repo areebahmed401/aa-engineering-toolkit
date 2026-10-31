@@ -3,8 +3,8 @@ from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import CoolProp.CoolProp as CP
-from Ref_Safety import *  # importing the function from the other file
-from Ref_Cycle import *  # importing the function from the other file
+from utils.Appendix.thermofluids.functions import get_environmental_ratings, get_health_ratings
+from utils.Appendix.thermofluids.Ref_Cycle import get_refrigeration_cycle
 
 
 class RefrigerantDiagramApp:
