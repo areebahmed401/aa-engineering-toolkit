@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import psychrolib
-
 from engtoolkit.core.results import Result, rfield
+
+from ._vendor import psychrolib  # vendored: PsychroLib ships no wheel, which the browser build needs
 
 psychrolib.SetUnitSystem(psychrolib.SI)
 

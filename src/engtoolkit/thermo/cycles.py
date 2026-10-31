@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-import CoolProp.CoolProp as CP
+from engtoolkit.materials._coolprop import CP
 
 from engtoolkit.core.results import Result, rfield
 

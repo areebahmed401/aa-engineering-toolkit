@@ -18,5 +18,5 @@ from .pipe_flow import (
     pipe_size_sweep,
 )
 from .psychro import MoistAirState, atmospheric_pressure, moist_air_state
-from .steam_tables import saturated_table, steam_state, superheated_table
+from .steam_tables import saturated_rows, saturated_table, steam_state, superheated_table
 from .vacuum import continuous_load, pumpdown

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import numpy as np
-from matplotlib import patches
 
 from engtoolkit.core.plotting import new_figure, styled
 
@@ -31,6 +30,7 @@ def beam_results_plot(x, v, theta, x_internal, V, M):
 
 def plot_fbd(beam, scale_force=None, scale_moment=None, scale_udl=None):
     """Free body diagram: loads (point, distributed, moment) and supports."""
+    from matplotlib import patches
 
     L = beam.length
     with styled():
@@ -86,6 +86,7 @@ def plot_fbd(beam, scale_force=None, scale_moment=None, scale_udl=None):
 
 def section_plot(section, title: str | None = None):
     """Cross-section drawing with centroid (●) and shear centre (✕)."""
+    from matplotlib import patches
 
     shape = section.outline()
     with styled():

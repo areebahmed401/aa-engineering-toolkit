@@ -15,7 +15,7 @@ from .cooling_tower import CoolingTowerResult, cooling_tower
 from .cycles import RefrigerationCycleResult, refrigeration_cycle
 from .insulation import InsulationResult, insulated_pipe_heat_loss, insulation_thickness
 from .pipe_flow import FITTING_FIELDS, PipeDropResult, pipe_pressure_drop
-from .steam_tables import saturated_table
+from .steam_tables import saturated_rows
 
 DN_CHOICES = tuple(p.dn for p in pipes.sizes("40"))
 DNLiteral = Literal[DN_CHOICES]  # type: ignore[valid-type]
@@ -27,7 +27,7 @@ UNIT_OF = {"T": "K", "P": "Pa", "H": "J/kg", "S": "J/(kg·K)", "Q": "", "D": "kg
 # ---------------- fluid properties ----------------
 
 class FluidPropertiesInputs(BaseModel):
-    fluid: str = Input("Water", "", "Fluid", "CoolProp name, e.g. Water, R134a, Air, IF97::Water, INCOMP::MEG[0.3]",
+    fluid: str = Input("IF97::Water", "", "Fluid", "CoolProp name, e.g. IF97::Water (fast), Water (IAPWS-95), R134a, INCOMP::MEG[0.3]",
                        json_schema_extra={"choices": "fluids"})
     input_1: StateInput = Input("T", "", "First input")
     value_1: float = Input(373.15, "", "First value (SI)")
@@ -63,7 +63,7 @@ class SaturatedTableInputs(BaseModel):
     start: float = Input(283.15, "", "Start (K or Pa)")
     stop: float = Input(473.15, "", "Stop (K or Pa)")
     points: int = Input(10, "", "Number of rows", ge=2, le=200)
-    formulation: Literal["IAPWS95", "IF97"] = Input("IAPWS95", "", "Formulation")
+    formulation: Literal["IF97", "IAPWS95"] = Input("IF97", "", "Formulation (IF97 = industrial standard)")
 
 
 @register_tool("thermo.saturated_steam_table", "Saturated steam table", SaturatedTableInputs,
@@ -73,15 +73,16 @@ class SaturatedTableInputs(BaseModel):
 def saturated_steam_table_tool(inp: SaturatedTableInputs) -> TableResult:
     import numpy as np
     values = np.linspace(inp.start, inp.stop, inp.points)
-    df = saturated_table(T=values, formulation=inp.formulation) if inp.by == "temperature" else \
-        saturated_table(P=values, formulation=inp.formulation)
-    return TableResult(columns=list(df.columns), rows=df.round(6).values.tolist(), n_rows=len(df))
+    columns, rows = saturated_rows(T=values, formulation=inp.formulation) if inp.by == "temperature" else \
+        saturated_rows(P=values, formulation=inp.formulation)
+    rows = [[round(v, 6) if isinstance(v, float) else v for v in row] for row in rows]
+    return TableResult(columns=columns, rows=rows, n_rows=len(rows))
 
 
 # ---------------- pipe pressure drop ----------------
 
 class PipePressureDropInputs(BaseModel):
-    fluid: str = Input("Water", "", "Fluid", json_schema_extra={"choices": "fluids"})
+    fluid: str = Input("IF97::Water", "", "Fluid", json_schema_extra={"choices": "fluids"})
     T: float = Input(293.15, "K", "Temperature", gt=0)
     P: float = Input(3e5, "Pa", "Pressure (absolute)", gt=0)
     mass_flow: float = Input(5.0, "kg/s", "Mass flow", gt=0)

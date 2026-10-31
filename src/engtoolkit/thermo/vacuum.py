@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass
 
 from engtoolkit.core.results import Result, rfield
-from engtoolkit.materials import fluid
+from engtoolkit.materials import WATER, fluid
 
 R_UNIVERSAL = 8.314462618
 P_NORMAL, T_NORMAL = 101325.0, 273.15
@@ -33,7 +33,7 @@ def mixture_properties(fluids: list[str], mass_fracs: list[float], T: float, P: 
 
 
 def _check_superheated(T: float, P: float) -> None:
-    T_sat = fluid("Water").prop("T", P=P, Q=0)
+    T_sat = fluid(WATER).prop("T", P=P, Q=0)
     if T <= T_sat:
         raise ValueError(f"Water must be superheated: at {P / 100:.1f} mbar Tsat = {T_sat - 273.15:.2f} °C, "
                          f"given {T - 273.15:.2f} °C")
@@ -75,7 +75,7 @@ class ContinuousLoadResult(Result):
 def continuous_load(P: float, T: float, steam_flow: float, co2_flow: float) -> ContinuousLoadResult:
     """Pump speed for a continuous steam + CO2 load (flows in kg/s) at vessel pressure P [Pa] (ideal gas)."""
     _check_superheated(T, P)
-    n_s = steam_flow / fluid("Water").molar_mass
+    n_s = steam_flow / fluid(WATER).molar_mass
     n_c = co2_flow / fluid("CO2").molar_mass
     n = n_s + n_c
     V = n * R_UNIVERSAL * T / P
