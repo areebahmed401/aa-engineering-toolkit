@@ -1,9 +1,0 @@
-fitting_type,Le_over_D,description
-elbow_90_standard,30,90 degree standard elbow
-elbow_90_LR,16,90 degree long radius elbow
-elbow_45,16,45 degree elbow
-tee_straight,20,Tee straight-through
-tee_branch,60,Tee branch flow
-gate_valve_open,8,Fully open gate valve
-globe_valve_open,340,Fully open globe valve
-check_valve_swing,100,Swing check valve

@@ -1,0 +1,12 @@
+# source: EN 10365 IPE section dimensions (h, b, web tw, flange tf, root radius r)
+designation,h_mm,b_mm,tw_mm,tf_mm,r_mm
+IPE 100,100,55,4.1,5.7,7
+IPE 120,120,64,4.4,6.3,7
+IPE 140,140,73,4.7,6.9,7
+IPE 160,160,82,5.0,7.4,9
+IPE 180,180,91,5.3,8.0,9
+IPE 200,200,100,5.6,8.5,12
+IPE 220,220,110,5.9,9.2,12
+IPE 240,240,120,6.2,9.8,15
+IPE 270,270,135,6.6,10.2,15
+IPE 300,300,150,7.1,10.7,15

@@ -1,0 +1,16 @@
+# source: Kenyan supplier quotes, collected by A. Ahmed
+type,dn,material,cost_usd
+elbow_90_LR,15,CS,0.71
+elbow_90_LR,20,CS,1.03
+elbow_90_LR,25,CS,1.25
+elbow_90_LR,32,CS,1.34
+elbow_90_LR,40,CS,1.78
+elbow_90_LR,50,CS,2.77
+elbow_90_LR,65,CS,6.07
+elbow_90_LR,80,CS,7.50
+elbow_90_LR,100,CS,14.46
+elbow_90_LR,125,CS,38.37
+elbow_90_LR,150,CS,53.54
+elbow_90_LR,200,CS,66.03
+elbow_90_LR,250,CS,71.43
+elbow_90_LR,300,CS,75.85
