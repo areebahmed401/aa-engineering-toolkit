@@ -67,6 +67,8 @@ class VesselDesignResult(Result):
     nozzles: list = rfield("", "Nozzles", default_factory=list, summary=False)
     external: ExternalPressureResult | None = rfield("", "External pressure", default=None, summary=False)
     hydrotest: HydrotestResult | None = rfield("", "Hydrotest", default=None, summary=False)
+    parts: list = rfield("", "Part results with labels and units (for front ends)", default_factory=list,
+                         summary=False)
     notes: list = rfield("", "Notes", default_factory=list, summary=False)
     disclaimer: str = rfield("", "Disclaimer", default=DISCLAIMER, summary=False)
 
@@ -148,6 +150,7 @@ def vessel_design(P: float, D_inside: float, S: float, length: float = 3.0, shel
     notes += [f"Shell: {n}" for n in shell.notes]
 
     noz_results: list[NozzleResult] = []
+    noz_names: list[str] = []
     host_kind = "sphere" if shell_kind == "sphere" else "cylinder"
     for nz in nozzles:
         on_head = nz.location == "head" and head is not None
@@ -164,6 +167,7 @@ def vessel_design(P: float, D_inside: float, S: float, length: float = 3.0, shel
                                  weld_leg_nozzle=nz.weld_leg, weld_leg_pad=nz.pad_weld_leg,
                                  inward_projection=nz.inward_projection, crown_radius=crown_radius)
         noz_results.append(r)
+        noz_names.append(nz.name)
         checks.append(_check(f"Nozzle {nz.name} reinforcement ({nz.location})", r.clause, r.A_required,
                              r.A_available, "m^2", r.status))
 
@@ -198,6 +202,13 @@ def vessel_design(P: float, D_inside: float, S: float, length: float = 3.0, shel
     n_ok = sum(r.status == "PASS" for r in noz_results)
     status = "PASS" if all(c["status"] == "PASS" for c in checks) else "FAIL"
     notes.append("Supports, nozzle loads, wind/seismic, UG-45 neck thickness and flange ratings are not checked")
+    parts = [{"name": "Shell", "fields": shell.fields_info()}]
+    if head is not None:
+        parts.append({"name": "Heads", "fields": head.fields_info()})
+    parts += [{"name": f"Nozzle {name}", "fields": r.fields_info()} for name, r in zip(noz_names, noz_results)]
+    if external is not None:
+        parts.append({"name": "External pressure", "fields": external.fields_info()})
+    parts.append({"name": "Hydrostatic test", "fields": hydro.fields_info()})
     return VesselDesignResult(
         status=status, mawp=mawp, mawp_governed_by=governing, design_pressure=P,
         hydro_test_pressure=hydro.test_pressure,
@@ -205,5 +216,6 @@ def vessel_design(P: float, D_inside: float, S: float, length: float = 3.0, shel
         head_t_required=head.t_required if head else math.nan, head_t_nominal=head.t_nominal if head else math.nan,
         external_allowable=external.P_allowable if external else math.nan,
         nozzles_passing=f"{n_ok}/{len(noz_results)}", volume=volume, mass_empty=mass,
-        checks=checks, shell=shell, head=head, nozzles=noz_results, external=external, hydrotest=hydro, notes=notes,
+        checks=checks, shell=shell, head=head, nozzles=noz_results, external=external, hydrotest=hydro,
+        parts=parts, notes=notes,
     )

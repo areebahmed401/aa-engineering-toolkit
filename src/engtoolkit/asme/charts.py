@@ -12,7 +12,7 @@ from .div1.heads import flat_head, formed_head, head_depth
 from .div1.nozzles import nozzle_reinforcement
 from .div1.shells import cylinder_circumferential_t, cylinder_longitudinal_t, sphere_t
 
-PRIMARY, ACCENT, ORANGE, BLUE, GREY = "#4F46E5", "#06B6D4", "#F97316", "#0EA5E9", "#64748B"
+PRIMARY, ACCENT, ORANGE, BLUE, GREY, PINK = "#4F46E5", "#06B6D4", "#F97316", "#0EA5E9", "#64748B", "#DB2777"
 HEAD_LABELS = {"ellipsoidal_2_1": "2:1 ellipsoidal", "ellipsoidal": "Ellipsoidal", "torispherical": "Torispherical",
                "hemispherical": "Hemispherical", "flat": "Flat"}
 
@@ -21,7 +21,7 @@ def _pressures(P: float) -> np.ndarray:
     return np.linspace(0.05 * P, 2 * P, 40)
 
 
-def _marker(name, x, y, color="#0F172A"):
+def _marker(name, x, y, color=PINK):  # visible on light and dark backgrounds
     return Series(name, [x], [y], mode="markers", color=color)
 
 
@@ -138,7 +138,7 @@ def _head_profile(kind, D, h_ratio, L, r, n=40):
 
 
 def vessel_outline(inp, res) -> Chart:
-    """Half-section of the vessel (axis vertical) with nominal walls, for display."""
+    """Section through the vessel axis (vertical) with nominal walls, for display."""
     sh, hd = inp.shell, inp.heads
     D = sh.D_inside
     if sh.kind == "sphere":
@@ -158,10 +158,12 @@ def vessel_outline(inp, res) -> Chart:
     prof_out = [(x * sx, y * (h_in + th_) / h_in if h_in > 0 else y + th_) for x, y in prof_in]
 
     def body(profile, wall):
+        """Closed full section: right half from bottom crown to top crown, then mirrored back."""
         top = [(x, Lt + y) for x, y in profile]
         bottom = [(x, -y) for x, y in reversed(profile)]
         R = D / 2 + wall
-        return [(0.0, bottom[0][1])] + bottom + [(R, 0.0), (R, Lt)] + top
+        right = bottom + [(R, 0.0), (R, Lt)] + top
+        return right + [(-x, y) for x, y in reversed(right)]
 
     outer = body(prof_out, ts)
     inner = body(prof_in, 0.0)
@@ -175,7 +177,7 @@ def vessel_outline(inp, res) -> Chart:
             ytop = Lt + prof_out[-1][1]
             nozzle_series.append(Series(f"Nozzle {nz.name}", [D / 6, D / 6], [ytop - th_, ytop + 0.12 * D],
                                         color=ORANGE))
-    return Chart("outline", "Vessel half-section (nominal walls, not to scale for nozzles)", "Radius", "m",
+    return Chart("outline", "Vessel section (nominal walls; nozzles schematic)", "Radius", "m",
                  "Height above bottom tangent line", "m", equal_aspect=True,
                  shapes=[Shape(outer), Shape(inner, hole=True)], series=nozzle_series)
 
