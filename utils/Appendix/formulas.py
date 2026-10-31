@@ -2,64 +2,78 @@ import math
 import numpy as np
 
 
-def colebrook_white(Re,roughness, D):
-   
-    epsilon_D = roughness / D    
-    # Initial guess for f
-    f = 0.001
-    # Maximum number of iterations
-    max_iter = 5000
-    # Tolerance for convergence
-    tol = 1e-6
-    # Iteration counter
-    iter_count = 0
-    while True:
-        # Calculate the left-hand side of the Colebrook-White equation
+def colebrook_white(Re, roughness, D, tol=1e-6, max_iter=5000):
+    """
+    Darcy friction factor [-] from the Colebrook-White equation.
+
+    Re        : Reynolds number [-]
+    roughness : absolute pipe roughness [m]
+    D         : inner diameter [m]
+    Laminar flow (Re <= 2300) returns 64/Re.
+    """
+    if Re <= 0:
+        raise ValueError("Reynolds number must be positive")
+    if Re <= 2300:
+        return 64.0 / Re
+
+    epsilon_D = roughness / D
+    f = 0.02  # good engineering initial guess
+    for _ in range(max_iter):
         lhs = 1 / math.sqrt(f)
-        # Calculate the right-hand side of the Colebrook-White equation
         rhs = -2 * math.log10((epsilon_D / 3.7) + (2.51 / (Re * math.sqrt(f))))
-        # Check for convergence
-        if abs(lhs - rhs) < tol or iter_count >= max_iter:
-            break
-        # Update f
+        if abs(lhs - rhs) < tol:
+            return f
         f = 1 / (rhs ** 2)
-        # Increment iteration counter
-        iter_count += 1
-    return f
+    raise RuntimeError("Colebrook-White did not converge")
+
+
+def fully_turbulent_friction_factor(roughness, D):
+    """
+    Fully turbulent Darcy friction factor f_T [-] (rough-pipe limit of Colebrook).
+    Used with Crane TP-410 L/D values: K = f_T * (L/D).
+    """
+    return 0.25 / math.log10(roughness / (3.7 * D)) ** 2
 
 def convert_headtobar(h, density):
+    """Head h [m] of a fluid with density [kg/m³] to pressure [bar]."""
     P= 9.81*density*h/100000
     return P
 
 def darcy_weisbach(f, distance, velocity, diameter):
-    loss= f * (distance * 1000) * (velocity ** 2) / (2 * diameter*9.81)
-    # print("Darcy-Weisbach loss: {} bar".format(loss))
+    """Head loss [m] over a length distance [m] of pipe with inner diameter [m]."""
+    loss= f * distance * (velocity ** 2) / (2 * diameter*9.81)
     return loss #in m of head
 
-def get_h_minor(f, distance, velocity, diameter):
-    loss= f * (distance * 1000) * (velocity ** 2) / (2 * diameter*9.81)
-    return loss
+def get_h_major(f, distance, velocity, diameter):
+    """Major (friction) head loss [m]; same as darcy_weisbach."""
+    return darcy_weisbach(f, distance, velocity, diameter)
 
-def get_h_major(n_elbow, n_valve, length):
-    n_expansion_loop= length/150*1000
-    Le_D_elbow=13
+def get_Le_minor(n_elbow, n_valve, length, diameter):
+    """
+    Equivalent length [m] of fittings (minor losses) for a line of the given length [m].
+    Uses L/D = 13 per elbow, 7.2 per valve and one expansion loop every 150 m
+    (4 elbows each).
+    """
+    Le_D_elbow = 13
     Le_D_valve = 7.2
-    # Le_D_rTee= 57
-    # Le_D_expansion_loop= 4*Le_D_elbow + 1.5
-    
-    loss= Le_D_elbow*n_elbow + Le_D_valve*n_valve+ n_expansion_loop #in mm
-    return loss
+    n_expansion_loop = length / 150
+    Le_D = Le_D_elbow * (n_elbow + 4 * n_expansion_loop) + Le_D_valve * n_valve
+    return Le_D * diameter
 
-def get_Le_reducer(n,Do,Di):
-    x=(Do/Di)*2
-    if x >0.9:
+def get_Le_reducer(n, Do, Di):
+    """
+    Equivalent length [same unit as Di] of n reducers from Do to Di,
+    picked from the area ratio beta² = (Di/Do)².
+    """
+    beta_sq = (Di / Do) ** 2
+    if beta_sq > 0.9:
         Le = 2.0
-    elif x > 0.7:
+    elif beta_sq > 0.7:
         Le = 16
     else:
         Le=38
-        
-    Loss = n*Le*Di # in mm
+
+    Loss = n*Le*Di
     return Loss
 
 #determine the nusselt number for steam

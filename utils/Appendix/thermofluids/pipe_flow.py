@@ -3,6 +3,12 @@ import numpy as np
 from CoolProp.CoolProp import PropsSI
 import matplotlib.pyplot as plt
 
+from utils import CATALOG_DIR
+from ..formulas import colebrook_white, fully_turbulent_friction_factor
+
+CRANE_DATA_PATH = CATALOG_DIR / "equivalent_lengths.csv"
+PIPE_CATALOG_PATH = CATALOG_DIR / "pipe catalog.csv"
+
 class Pipe:
     def __init__(self, diameter, length, material, temperature = None):
         self.D = diameter   # [m]
@@ -50,40 +56,16 @@ class PipeFlow:
             / self.viscosity
         )
 
-    def colebrook_white(self, Re, roughness, D, tol=1e-6, max_iter=5000):
-        """
-        Colebrook–White equation for Darcy friction factor.
-        """
-        if Re <= 0:
-            raise ValueError("Reynolds number must be positive")
-
-        if Re <= 2300:
-            return 64.0 / Re
-
-        eps_D = roughness / D
-        f = 0.02  # good engineering initial guess
-
-        for _ in range(max_iter):
-            inv_sqrt_f = 1.0 / math.sqrt(f)
-            rhs = -2.0 * math.log10(
-                eps_D / 3.7 + 2.51 / (Re * math.sqrt(f))
-            )
-
-            if abs(inv_sqrt_f - rhs) < tol:
-                return f
-
-            f = 1.0 / rhs**2
-
-        raise RuntimeError("Colebrook–White did not converge")
-    
     def friction_factor(self, Q):
         Re = self.reynolds(Q)
-        return self.colebrook_white(
+        return colebrook_white(
             Re,
             roughness=self.pipe.material.roughness,
             D=self.pipe.D
         )
-        
+
+    def fully_turbulent_friction_factor(self):
+        return fully_turbulent_friction_factor(self.pipe.material.roughness, self.pipe.D)
 
     def pressure_drop(self, Q):
         f = self.friction_factor(Q)
@@ -121,7 +103,7 @@ class PipeSizer:
         """
         for D in diameters:
             pipe = Pipe(D, self.length, self.material)
-            flow = PipeFlow(pipe, self.fluid, self.T, self.P)
+            flow = PipeFlow(pipe, self.fluid_name, self.T, self.P)
 
             if flow.pressure_drop(Q) <= dp_max:
                 return D
@@ -140,7 +122,7 @@ class PipeSizer:
             if fittings is None:
                 fittings = [("elbow_90_standard", 2), ("tee_straight", 1), ("tee_branch", 1)]
 
-            crane_data = load_crane_data("./../utils/Catalogs/equivalent_lengths.csv")
+            crane_data = load_crane_data(CRANE_DATA_PATH)
 
             # Filter pipe sizes in range
             pipe_sizes = [size for size, props in pipe_catalog.items()
@@ -241,13 +223,15 @@ class CraneMinorLoss(FlowElement): # pressure drop due to fittings via Crane-410
         except KeyError:
             raise ValueError(f"Unknown Crane fitting: {fitting_type}")
 
+    @property
+    def K(self):
+        # Crane TP-410: K = f_T * (L/D), f_T = fully turbulent friction factor of the pipe
+        return self.pipe_flow.fully_turbulent_friction_factor() * self.Le_over_D
+
     def pressure_drop(self, Q):
-        f = self.pipe_flow.friction_factor(Q)
         rho = self.pipe_flow.density
         v = self.pipe_flow.velocity(Q)
-
-        K = f * self.Le_over_D
-        return self.count * K * 0.5 * rho * v**2
+        return self.count * self.K * 0.5 * rho * v**2
 
     
 class PipeLine: #complete pipe line
@@ -268,7 +252,7 @@ class PipeLine: #complete pipe line
 #------ CATALOG LOADERs---------------------------------------
 import csv
 
-def load_crane_data(csv_path):
+def load_crane_data(csv_path=CRANE_DATA_PATH):
     data = {}
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
@@ -276,7 +260,7 @@ def load_crane_data(csv_path):
             data[row["fitting_type"]] = float(row["Le_over_D"])
     return data
 
-def load_pipe_catalog(csv_path):
+def load_pipe_catalog(csv_path=PIPE_CATALOG_PATH):
     data = {}
     with open(csv_path, newline='') as f:
         reader = csv.DictReader(f)

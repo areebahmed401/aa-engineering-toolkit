@@ -1,4 +1,19 @@
 # converters.py
+import math
+
+class Angle:
+    """Angle conversions."""
+    @staticmethod
+    def rad_to_deg(value_rad: float) -> float:
+        return math.degrees(value_rad)
+
+    @staticmethod
+    def deg_to_rad(value_deg: float) -> float:
+        return math.radians(value_deg)
+
+def rads_to_degrees(value_rad: float) -> float:
+    return Angle.rad_to_deg(value_rad)
+
 class Length:
     """Length conversions."""
     @staticmethod

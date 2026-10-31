@@ -58,9 +58,11 @@ def get_refrigeration_cycle( refrigerant, t_evap, t_cond, comp_power):
         temp_lift = t_cond - t_evap #K
 
         return p_evap, p_cond, t_1, p_1, h_1, s_1, s_2, t_2, p_2, h_2,s_2x, t_2x, p_2x, h_2x, h_3, s_3, t_3, p_3, h_4, p_4, t_4, s_4, COP, rdot, heat_load, cooling_load, temp_lift
-    except ValueError:
-        
-        return 'Values not in range'
+    except ValueError as err:
+        raise ValueError(
+            f"Refrigeration cycle for {refrigerant} not solvable at "
+            f"T_evap={t_evap - 273.15:.1f} °C, T_cond={t_cond - 273.15:.1f} °C: {err}"
+        ) from err
 
 # refrigerant = 'IsoButane'
 # p_evap, p_cond, t_1, p_1, h_1, s_1, s_2, t_2, p_2, h_2,s_2x, t_2x, p_2x, h_2x, h_3, s_3, t_3, p_3, h_4, p_4, t_4, s_4, COP, rdot, heat_load, cooling_load, temp_lift = get_refrigeration_cycle(refrigerant,25,90, 80)
