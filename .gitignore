@@ -8,6 +8,8 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.import_linter_cache/
 
 # jupyter
 .ipynb_checkpoints/

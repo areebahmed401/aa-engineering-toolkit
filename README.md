@@ -4,31 +4,50 @@
 
 *Areeb Ahmed | Mechanical Engineer*
 
-Engineering notebooks for structural, thermofluids and ASME code calculations, backed by a small
-Python library (`utils`) that the notebooks import.
+Engineering calculations as a Python package (`engtoolkit`) used by Jupyter notebooks today and by
+a browser-based web app next. Four disciplines share one materials database and one set of standard
+catalogs: **Thermodynamics & Fluids, Structural, Electrical (battery) and ASME**.
 
 > **Disclaimer:** this toolkit is for learning, estimation and preliminary design. It is not a
 > substitute for design by a qualified engineer or for checks against the current edition of the
 > applicable codes and standards (ASME, API, EN, etc.). Verify every result before relying on it.
 
-## Contents
+## What's inside
 
-| Folder | What's in it |
+| Package | Contents |
 |---|---|
-| `0. overview.ipynb` | Index of the toolkit |
-| `1. Structural/` | Statics (FBD, FEM and determinate solvers), bending, torsion & warping, plus outlines for shear-flexible beams, buckling and Maxwell-Mohr |
-| `2. Fluids/` | Pipe sizing: Darcy-Weisbach with Crane TP-410 fittings, velocity / pressure drop / cost vs pipe size |
-| `3. ASME/` | Notes on ASME VIII Div 1 pressure vessels and B31.3 process piping |
-| `utils/Appendix/` | The library: materials, unit converters, formulas, `structural/` (sections, loads, solvers, torsion) and `thermofluids/` (pipe flow, refrigeration cycle, cooling tower, insulation, p-h / T-s diagrams) |
-| `utils/Catalogs/` | CSV data: Sch 40 pipe sizes and costs, fittings, valves, Crane L/D values |
-| `Images/` | Diagrams used by the notebooks |
-| `branding/` | Logo, theme colours (`theme.json`) and matplotlib style (`aa.mplstyle`) |
-| `tests/` | Unit tests that check the library against textbook results |
+| `engtoolkit.materials` | Shared properties for every discipline: metals, polymers, composites, insulation (temperature-dependent curves, each with a source) and fluids via CoolProp (`fluid("Water")`, `fluid("IF97::Water")`, `fluid("INCOMP::MEG[0.3]")`) |
+| `engtoolkit.catalogs` | ASME B36.10/B36.19 pipe schedules 10/40/80, EN 10365 IPE profiles, Crane TP-410 fitting data, supplier costs |
+| `engtoolkit.thermo` | Fluid properties, steam tables (IAPWS-95 / IF97), pipe pressure drop (Colebrook + Crane), heat transfer correlations, insulation sizing with natural convection + radiation, refrigeration/heat-pump cycle, psychrometrics, cooling towers, vacuum pumps |
+| `engtoolkit.structural` | Sections (rectangle, tubes, circle, I/H, C, T, Z, L, catalog profiles) with properties and outlines, determinacy check, equilibrium and 2D FEM (Euler-Bernoulli / Timoshenko), torsion and warping |
+| `engtoolkit.electrical` | Battery modelling — next phases (equivalent circuit, thermal, aging; PyBaMM optional) |
+| `engtoolkit.asme` | ASME VIII Div 1 vessel sizing — next phases |
+| `engtoolkit.core` | Units (SI inside, pint at the edges), result objects, the tool registry, plotting style |
+
+Every calculation the web app will expose is a registered **tool** with labelled, unit-tagged inputs
+and a validation test against a cited reference:
+
+```python
+import engtoolkit
+engtoolkit.run("thermo.insulation_thickness", dn=100, T_fluid=453.15, q_max=50)
+engtoolkit.run("structural.beam_analysis", {"length": 3.0, "right_support": "pinned"})
+[t.id for t in engtoolkit.list_tools()]
+```
+
+Units are SI throughout (m, N, Pa, K, W). Beam sign convention: loads `P`, `w` positive downward,
+applied moments positive counter-clockwise, deflection positive upward, sagging moment positive.
+
+## Repository layout
+
+```
+src/engtoolkit/   the package (core, materials, catalogs, thermo, structural, electrical, asme, _template)
+notebooks/        structural/, thermo/, asme/, electrical/ (+ 00_overview.ipynb)
+tests/            one folder per package; every tool has a test_tool_<name> validation test
+branding/         logo, theme colours (theme.json), matplotlib style
+```
 
 Reference documents (codes, standards, vendor catalogues) are not distributed with this repo.
 Keep your own copies in a local `references/` folder, which git ignores.
-
-Units are SI throughout (m, N, Pa, K unless a name says otherwise).
 
 ## Setup
 
@@ -36,7 +55,7 @@ Units are SI throughout (m, N, Pa, K unless a name says otherwise).
 python -m venv venv
 venv\Scripts\activate          # Windows (macOS/Linux: source venv/bin/activate)
 pip install -r requirements-dev.txt
-pip install -e .               # installs utils so notebooks can import it from any folder
+pip install -e ".[dev,notebook]"
 ```
 
 In VS Code, open the folder, open a notebook and pick the `venv` interpreter as the kernel.
@@ -45,33 +64,39 @@ In VS Code, open the folder, open a notebook and pick the `venv` interpreter as 
 > paths or create the virtual environment at a short path (for example `C:\venvs\etk`) and select
 > that interpreter in VS Code.
 
-## Using the library
+## Example
 
 ```python
-from utils.Appendix.materials import get_material
-from utils.Appendix.structural import beam, I_beam, Fixed, Free, PointLoad, FEMSolver
+from engtoolkit.structural import Beam, IBeam, Fixed, Pinned, PointLoad, analyze_beam
 
-b = beam(get_material("Steel"), length=2.0, shape=I_beam(0.2, 0.02, 0.3, 0.01))
-b.set_end_conditions(Fixed(), Free())
-b.add_load(PointLoad(P=10e3, x=2.0))      # downward positive
-
-solver = FEMSolver(b, n_elem=50)
-solver.solve()
-print(solver.reactions())
-solver.plot_results()
+b = Beam("S355", length=4.0, shape=IBeam.from_profile("IPE 200"))
+b.set_end_conditions(Fixed(), Pinned())      # statically indeterminate -> FEM
+b.add_load(PointLoad(P=20e3, x=2.0))
+result = analyze_beam(b)
+result.summary()                             # reactions, max moment, stress, utilisation
+result.plot()                                # deflection / slope / shear / moment diagrams
 ```
 
-Sign convention for beams: loads `P`, `w` positive downward, applied moments positive
-counter-clockwise, deflection positive upward, sagging bending moment positive.
+## Adding to the toolkit
+
+- **A material:** add an entry with a `source` to `src/engtoolkit/materials/data/*.yaml`.
+- **A tool:** write the calculation (returning a `Result`), register it in the discipline's `tools.py`
+  with `@register_tool(...)` and a reference, and add a `test_tool_<name>` test. The web app picks it up.
+- **A discipline:** copy `src/engtoolkit/_template/` and follow its instructions.
+
+Dependency direction is enforced by `lint-imports`: `core` ← `materials`/`catalogs` ← `thermo` ←
+`electrical`, and `structural` ← `asme`.
 
 ## Tests
 
 ```bash
-pytest                                     # library unit tests
-pytest --nbmake "0. overview.ipynb" "1. Structural" "2. Fluids" "3. ASME"   # every notebook runs
+pytest                                   # unit + tool validation tests
+pytest --nbmake notebooks                # every notebook runs top to bottom
+lint-imports                             # dependency layers
+ruff check src tests
 ```
 
-Both run on GitHub Actions for every push.
+All of these run on GitHub Actions for every push.
 
 ## License
 
