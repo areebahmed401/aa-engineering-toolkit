@@ -21,6 +21,7 @@ dist/
 # web app: generated Python assets, dependencies, build output, test reports
 web/public/py/
 web/node_modules/
+web/.vite/
 web/dist/
 web/test-results/
 web/playwright-report/
