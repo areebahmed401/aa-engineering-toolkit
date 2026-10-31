@@ -11,6 +11,7 @@ from engtoolkit.core.registry import Input, register_tool
 from engtoolkit.core.results import Result, rfield
 from engtoolkit.materials import get_material
 
+from . import charts as _charts
 from .analysis import BeamAnalysisResult, analyze_beam
 from .loads import DistributedLoad, MomentLoad, PointLoad, support
 from .sections import (
@@ -62,7 +63,8 @@ class SectionPropertiesInputs(SectionInputs):
 @register_tool("structural.section_properties", "Section properties", SectionPropertiesInputs,
                description="Area, second moments, section modulus, torsion and warping constants, centroid and shear centre.",
                reference="Gere & Goodno, Mechanics of Materials; Roark's Formulas (torsion); thin-walled theory (shear centre, warping)",
-               tags=("section", "beam", "properties"), custom_page=True)
+               tags=("section", "beam", "properties"), custom_page=True,
+               charts=lambda inp, res: _charts.section_charts(build_section(inp)))
 def section_properties_tool(inp: SectionPropertiesInputs) -> SectionProperties:
     return build_section(inp).properties(rho=get_material(inp.material).rho)
 
@@ -105,7 +107,7 @@ def build_beam(inp: BeamAnalysisInputs) -> Beam:
 @register_tool("structural.beam_analysis", "Beam analysis", BeamAnalysisInputs,
                description="Determinacy check, then equilibrium or 2D FEM: reactions, deflection, shear, moment and stress.",
                reference="Closed-form beam tables (Roark; Gere & Goodno): PL³/3EI, 5wL⁴/384EI, wL²/8, wL²/12",
-               tags=("beam", "FEM", "bending"), custom_page=True)
+               tags=("beam", "FEM", "bending"), custom_page=True, charts=_charts.beam_charts)
 def beam_analysis_tool(inp: BeamAnalysisInputs) -> BeamAnalysisResult:
     return analyze_beam(build_beam(inp), theory=inp.theory, n_elem=inp.n_elem)
 
@@ -133,7 +135,9 @@ class TorsionInputs(BaseModel):
 @register_tool("structural.torsion", "Torsion and warping (cantilever)", TorsionInputs,
                description="Twist of a cantilever under end torque: warping torsion for open sections, Saint-Venant otherwise.",
                reference="Vlasov warping torsion closed form θ(L) = TL/GJ·(1 − tanh α/α); Saint-Venant θ = TL/GJ",
-               tags=("torsion", "warping"))
+               tags=("torsion", "warping"),
+               charts=lambda inp, res: _charts.torsion_charts(
+                   Beam(inp.material, inp.length, build_section(inp.section)), inp.torque, res))
 def torsion_tool(inp: TorsionInputs) -> TorsionResult:
     section = build_section(inp.section)
     b = Beam(inp.material, inp.length, section)

@@ -4,10 +4,10 @@ from __future__ import annotations
 import numpy as np
 
 from engtoolkit.core.plotting import new_figure, styled
-from engtoolkit.materials import fluid
+from engtoolkit.materials import WATER, fluid
 
 
-def ph_ts_diagram(fluid_name: str = "Water", states=None, close: bool = False, n: int = 200):
+def ph_ts_diagram(fluid_name: str = WATER, states=None, close: bool = False, n: int = 200):
     """
     Saturation dome on p-h and T-s axes, with optional state points (objects with T, P, h, s)
     connected in order (``close=True`` joins the last back to the first, e.g. for a cycle).

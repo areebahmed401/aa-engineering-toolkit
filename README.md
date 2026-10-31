@@ -4,9 +4,31 @@
 
 *Areeb Ahmed | Mechanical Engineer*
 
-Engineering calculations as a Python package (`engtoolkit`) used by Jupyter notebooks today and by
-a browser-based web app next. Four disciplines share one materials database and one set of standard
-catalogs: **Thermodynamics & Fluids, Structural, Electrical (battery) and ASME**.
+Engineering calculations as a Python package (`engtoolkit`) used by Jupyter notebooks and by a web
+app that runs the same package in your browser. Four disciplines share one materials database and
+one set of standard catalogs: **Thermodynamics & Fluids, Structural, Electrical (battery) and ASME**.
+
+**▶ Web app: <https://areebahmed401.github.io/aa-engineering-toolkit/>** (no install; Python runs
+locally in the browser via Pyodide, so nothing you enter leaves your device).
+
+## Web app
+
+`web/` is a React + TypeScript + Tailwind front end. Python runs in a Web Worker (Pyodide) and the
+input forms, result cards and interactive Plotly charts are generated from the tool registry, so a
+new registered tool appears in the app without front-end code. Inputs are encoded in the URL, so a
+link reproduces a calculation, and results download as a Markdown report or CSV.
+
+```bash
+python scripts/build_web_assets.py   # wheel + tool schema + dropdown choices -> web/public/py
+cd web
+npm install
+npm run dev                          # http://localhost:5173
+npm test                             # unit tests;  npm run e2e  runs every tool in Chromium
+```
+
+Water and steam default to IAPWS-IF97 and convection uses tabulated air, both instant in the
+browser. Refrigerants and other CoolProp fluids load CoolProp's full fluid library on first use,
+which takes about a minute in the browser.
 
 > **Disclaimer:** this toolkit is for learning, estimation and preliminary design. It is not a
 > substitute for design by a qualified engineer or for checks against the current edition of the

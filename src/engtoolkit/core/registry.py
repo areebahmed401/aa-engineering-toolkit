@@ -55,18 +55,26 @@ class ToolSpec:
     reference: str = ""
     tags: tuple[str, ...] = ()
     custom_page: bool = False  # True when the web app has a hand-written page for it
+    charts: Callable[[Any, Any], list] | None = None  # (inputs, result) -> list[Chart]
     meta: dict[str, Any] = field(default_factory=dict)
 
     @property
     def section(self) -> str:
         return self.id.split(".", 1)[0]
 
-    def run(self, inputs: BaseModel | dict | None = None, **kwargs):
+    def parse(self, inputs: BaseModel | dict | None = None, **kwargs) -> BaseModel:
         if inputs is None:
-            inputs = self.inputs(**kwargs)
-        elif isinstance(inputs, dict):
-            inputs = self.inputs(**{**inputs, **kwargs})
-        return self.func(inputs)
+            return self.inputs(**kwargs)
+        if isinstance(inputs, dict):
+            return self.inputs(**{**inputs, **kwargs})
+        return inputs
+
+    def run(self, inputs: BaseModel | dict | None = None, **kwargs):
+        return self.func(self.parse(inputs, **kwargs))
+
+    def make_charts(self, inputs: BaseModel, result) -> list:
+        """Charts for a result (empty if the tool defines none)."""
+        return list(self.charts(inputs, result)) if self.charts else []
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -77,6 +85,7 @@ class ToolSpec:
             "reference": self.reference,
             "tags": list(self.tags),
             "custom_page": self.custom_page,
+            "has_charts": self.charts is not None,
             "inputs": self.inputs.model_json_schema(),
         }
 
@@ -85,8 +94,9 @@ _REGISTRY: dict[str, ToolSpec] = {}
 
 
 def register_tool(tool_id: str, name: str, inputs: type[BaseModel], *, description: str = "",
-                  reference: str = "", tags: tuple[str, ...] = (), custom_page: bool = False):
-    """Decorator registering a calculation as a tool."""
+                  reference: str = "", tags: tuple[str, ...] = (), custom_page: bool = False,
+                  charts: Callable[[Any, Any], list] | None = None):
+    """Decorator registering a calculation as a tool. ``charts(inputs, result)`` returns Chart specs."""
     section = tool_id.split(".", 1)[0]
     if section not in SECTIONS or "." not in tool_id:
         raise ValueError(f"Tool id {tool_id!r} must look like '<section>.<name>' with section in {list(SECTIONS)}")
@@ -97,7 +107,7 @@ def register_tool(tool_id: str, name: str, inputs: type[BaseModel], *, descripti
         if tool_id in _REGISTRY and _REGISTRY[tool_id].func is not func:
             raise ValueError(f"Tool {tool_id!r} is already registered")
         _REGISTRY[tool_id] = ToolSpec(tool_id, name, inputs, func, description or (func.__doc__ or "").strip(),
-                                      reference, tuple(tags), custom_page)
+                                      reference, tuple(tags), custom_page, charts)
         return func
 
     return decorator

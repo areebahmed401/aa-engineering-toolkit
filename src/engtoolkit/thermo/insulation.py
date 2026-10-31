@@ -13,6 +13,7 @@ import math
 from dataclasses import dataclass
 
 from engtoolkit.core.results import Result, rfield
+from engtoolkit.core.solvers import brentq
 from engtoolkit.materials import Material, get_material
 
 from .heat_transfer import (
@@ -57,27 +58,30 @@ def insulated_pipe_heat_loss(
     r3 = r2 + thickness
     R_pipe = R_conduction_cylinder(r1, r2, k_pipe)
 
-    T_s = T_ambient + 0.1 * (T_fluid - T_ambient)  # initial guess
-    k_ins = h = q = math.nan
-    for _ in range(200):
-        T_mean_ins = 0.5 * (T_fluid + T_s)
-        k_ins = _k_of(k_insulation, T_mean_ins) if thickness > 0 else 1.0
+    if not (isinstance(h_outer, (int, float)) or h_outer in ("natural", "wind")):
+        raise ValueError("h_outer must be a number, 'natural' or 'wind'")
+
+    def network(T_s: float):
+        """Heat loss and surface temperature implied by an assumed surface temperature T_s."""
+        k_ins = _k_of(k_insulation, 0.5 * (T_fluid + T_s)) if thickness > 0 else math.nan
         R_ins = R_conduction_cylinder(r2, r3, k_ins) if thickness > 0 else 0.0
         if isinstance(h_outer, (int, float)):
             h = float(h_outer)
         elif h_outer == "natural":
             h = natural_convection_horizontal_cylinder(T_s, T_ambient, 2 * r3) + h_radiation(emissivity, T_s, T_ambient)
-        elif h_outer == "wind":
-            h = forced_convection_cylinder(wind_speed, T_s, T_ambient, 2 * r3) + h_radiation(emissivity, T_s, T_ambient)
         else:
-            raise ValueError("h_outer must be a number, 'natural' or 'wind'")
+            h = forced_convection_cylinder(wind_speed, T_s, T_ambient, 2 * r3) + h_radiation(emissivity, T_s, T_ambient)
         R_out = 1.0 / (max(h, 1e-6) * 2 * math.pi * r3)
         q = (T_fluid - T_ambient) / (R_pipe + R_ins + R_out)
-        T_s_new = T_ambient + q * R_out
-        if abs(T_s_new - T_s) < 1e-6:
-            T_s = T_s_new
-            break
-        T_s = 0.5 * (T_s + T_s_new)
+        return q, T_ambient + q * R_out, h, k_ins, R_ins, R_out
+
+    if abs(T_fluid - T_ambient) < 1e-9:
+        T_s = T_ambient
+    else:
+        # Surface temperature consistent with its own h: root of T_s(implied) - T_s between ambient and fluid
+        lo, hi = sorted((T_ambient, T_fluid))
+        T_s = brentq(lambda T: network(T)[1] - T, lo + 1e-9, hi - 1e-9, xtol=1e-6)
+    q, T_s, h, k_ins, R_ins, R_out = network(T_s)
 
     bare = math.nan
     if _bare:
@@ -96,7 +100,7 @@ def insulation_thickness(
     t_max: float = 0.5,
 ) -> InsulationResult:
     """
-    Minimum insulation thickness [m] keeping the heat loss at or below q_max [W/m] (bisection).
+    Minimum insulation thickness [m] keeping the heat loss at or below q_max [W/m] (Brent's method).
     Raises ValueError if even t_max is not enough.
     """
     def run(t):
@@ -110,14 +114,8 @@ def insulation_thickness(
         return res
     if run(t_max).heat_loss > q_max:
         raise ValueError(f"Heat loss target {q_max} W/m not reachable with {t_max * 1000:.0f} mm of insulation")
-    lo, hi = 0.0, t_max
-    for _ in range(60):
-        mid = 0.5 * (lo + hi)
-        if run(mid).heat_loss > q_max:
-            lo = mid
-        else:
-            hi = mid
-    return insulated_pipe_heat_loss(d_in, d_out, hi, T_fluid, T_ambient, k_insulation, pipe_material,
+    t = brentq(lambda t: run(t).heat_loss - q_max, 0.0, t_max, xtol=1e-7)
+    return insulated_pipe_heat_loss(d_in, d_out, t, T_fluid, T_ambient, k_insulation, pipe_material,
                                     h_outer, emissivity, wind_speed)
 
 

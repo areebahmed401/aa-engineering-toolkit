@@ -1,5 +1,6 @@
 """
-Steam tables generated from CoolProp (IAPWS-95 by default, IAPWS-IF97 with ``formulation="IF97"``).
+Steam tables generated from CoolProp: IAPWS-IF97 by default (industrial standard, fast), IAPWS-95 with
+``formulation="IAPWS95"``.
 
 Tables come back as pandas DataFrames in engineering units (°C, kPa, kJ/kg, m³/kg) unless
 ``units="SI"``. For single states use ``steam_state(T=..., P=...)`` (SI inputs).
@@ -17,7 +18,7 @@ def _water(formulation: str):
     return fluid("IF97::Water" if formulation.upper() == "IF97" else "Water")
 
 
-def steam_state(formulation: str = "IAPWS95", **inputs) -> FluidState:
+def steam_state(formulation: str = "IF97", **inputs) -> FluidState:
     """Water/steam state from any two of T, P, H, S, Q, D, U (SI)."""
     return _water(formulation).state(**inputs)
 
@@ -33,41 +34,58 @@ def _saturated_row(w, given: dict) -> dict:
     }
 
 
-_ENG = {"T": ("degC", lambda x: x - 273.15), "P": ("kPa", lambda x: x / 1e3)}
-_ENG_ENERGY = lambda x: x / 1e3  # J/kg -> kJ/kg, J/kg.K -> kJ/kg.K
+_LABELS = {"T": "T [°C]", "P": "P [kPa]", "v_f": "v_f [m³/kg]", "v_g": "v_g [m³/kg]", "u_f": "u_f [kJ/kg]",
+           "u_g": "u_g [kJ/kg]", "h_f": "h_f [kJ/kg]", "h_fg": "h_fg [kJ/kg]", "h_g": "h_g [kJ/kg]",
+           "s_f": "s_f [kJ/kg·K]", "s_fg": "s_fg [kJ/kg·K]", "s_g": "s_g [kJ/kg·K]", "v": "v [m³/kg]",
+           "u": "u [kJ/kg]", "h": "h [kJ/kg]", "s": "s [kJ/kg·K]"}
+
+
+def _engineering(col: str, value):
+    if not isinstance(value, float):
+        return value
+    if col == "T":
+        return value - 273.15
+    if col == "P":
+        return value / 1e3
+    if col[0] in "uhs":
+        return value / 1e3  # J/kg -> kJ/kg, J/kg.K -> kJ/kg.K
+    return value
+
+
+def _columns_rows(rows: list[dict], units: str) -> tuple[list[str], list[list]]:
+    """Plain column names and row lists (no pandas, so the web app stays light)."""
+    keys = list(rows[0]) if rows else []
+    if units.upper() == "SI":
+        return keys, [[r[k] for k in keys] for r in rows]
+    return [_LABELS.get(k, k) for k in keys], [[_engineering(k, r[k]) for k in keys] for r in rows]
 
 
 def _to_frame(rows: list[dict], units: str):
     import pandas as pd
-    df = pd.DataFrame(rows)
-    if units.upper() == "SI":
-        return df
-    for col in df.columns:
-        if col == "T":
-            df[col] = df[col] - 273.15
-        elif col == "P":
-            df[col] = df[col] / 1e3
-        elif col[0] in "uhs":
-            df[col] = _ENG_ENERGY(df[col])
-    return df.rename(columns={"T": "T [°C]", "P": "P [kPa]", "v_f": "v_f [m³/kg]", "v_g": "v_g [m³/kg]",
-                              "u_f": "u_f [kJ/kg]", "u_g": "u_g [kJ/kg]", "h_f": "h_f [kJ/kg]",
-                              "h_fg": "h_fg [kJ/kg]", "h_g": "h_g [kJ/kg]", "s_f": "s_f [kJ/kg·K]",
-                              "s_fg": "s_fg [kJ/kg·K]", "s_g": "s_g [kJ/kg·K]", "v": "v [m³/kg]",
-                              "u": "u [kJ/kg]", "h": "h [kJ/kg]", "s": "s [kJ/kg·K]"})
+    columns, values = _columns_rows(rows, units)
+    return pd.DataFrame(values, columns=columns)
 
 
-def saturated_table(T: Iterable[float] | None = None, P: Iterable[float] | None = None,
-                    units: str = "engineering", formulation: str = "IAPWS95"):
-    """Saturated water/steam table by temperature [K] or pressure [Pa]."""
+def saturated_rows(T: Iterable[float] | None = None, P: Iterable[float] | None = None,
+                   units: str = "engineering", formulation: str = "IF97") -> tuple[list[str], list[list]]:
+    """Saturated table as (columns, rows) by temperature [K] or pressure [Pa]."""
     if (T is None) == (P is None):
         raise ValueError("Give either T or P values")
     w = _water(formulation)
     rows = [_saturated_row(w, {"T": float(t)}) for t in T] if T is not None else \
            [_saturated_row(w, {"P": float(p)}) for p in P]
-    return _to_frame(rows, units)
+    return _columns_rows(rows, units)
 
 
-def superheated_table(P: float, T: Iterable[float], units: str = "engineering", formulation: str = "IAPWS95"):
+def saturated_table(T: Iterable[float] | None = None, P: Iterable[float] | None = None,
+                    units: str = "engineering", formulation: str = "IF97"):
+    """Saturated water/steam table (pandas DataFrame) by temperature [K] or pressure [Pa]."""
+    import pandas as pd
+    columns, rows = saturated_rows(T, P, units, formulation)
+    return pd.DataFrame(rows, columns=columns)
+
+
+def superheated_table(P: float, T: Iterable[float], units: str = "engineering", formulation: str = "IF97"):
     """Superheated (or compressed) water table at pressure P [Pa] for temperatures T [K]."""
     w = _water(formulation)
     rows = []

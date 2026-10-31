@@ -18,6 +18,13 @@ __pycache__/
 build/
 dist/
 
+# web app: generated Python assets, dependencies, build output, test reports
+web/public/py/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+
 # local reference documents (codes, standards, catalogues): never committed
 references/
 *.pdf

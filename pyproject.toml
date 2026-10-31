@@ -17,7 +17,6 @@ dependencies = [
     "pandas",
     "matplotlib",
     "CoolProp>=7",
-    "PsychroLib",
     "pydantic>=2",
     "pint",
     "pyyaml",
@@ -39,7 +38,7 @@ where = ["src"]
 include = ["engtoolkit*"]
 
 [tool.setuptools.package-data]
-engtoolkit = ["**/*.csv", "**/*.yaml", "**/*.mplstyle", "**/*.md"]
+engtoolkit = ["**/*.csv", "**/*.yaml", "**/*.mplstyle", "**/*.md", "**/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -48,6 +47,7 @@ addopts = "--import-mode=importlib"
 [tool.ruff]
 line-length = 120
 src = ["src"]
+extend-exclude = ["src/engtoolkit/thermo/_vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F"]

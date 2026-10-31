@@ -11,11 +11,12 @@ from engtoolkit.core.registry import Input, register_tool
 from engtoolkit.core.results import Result, rfield
 from engtoolkit.materials import FluidState, fluid
 
+from . import charts as _charts
 from .cooling_tower import CoolingTowerResult, cooling_tower
 from .cycles import RefrigerationCycleResult, refrigeration_cycle
 from .insulation import InsulationResult, insulated_pipe_heat_loss, insulation_thickness
 from .pipe_flow import FITTING_FIELDS, PipeDropResult, pipe_pressure_drop
-from .steam_tables import saturated_table
+from .steam_tables import saturated_rows
 
 DN_CHOICES = tuple(p.dn for p in pipes.sizes("40"))
 DNLiteral = Literal[DN_CHOICES]  # type: ignore[valid-type]
@@ -27,7 +28,7 @@ UNIT_OF = {"T": "K", "P": "Pa", "H": "J/kg", "S": "J/(kg·K)", "Q": "", "D": "kg
 # ---------------- fluid properties ----------------
 
 class FluidPropertiesInputs(BaseModel):
-    fluid: str = Input("Water", "", "Fluid", "CoolProp name, e.g. Water, R134a, Air, IF97::Water, INCOMP::MEG[0.3]",
+    fluid: str = Input("IF97::Water", "", "Fluid", "CoolProp name, e.g. IF97::Water (fast), Water (IAPWS-95), R134a, INCOMP::MEG[0.3]",
                        json_schema_extra={"choices": "fluids"})
     input_1: StateInput = Input("T", "", "First input")
     value_1: float = Input(373.15, "", "First value (SI)")
@@ -44,7 +45,7 @@ class FluidPropertiesInputs(BaseModel):
 @register_tool("thermo.fluid_properties", "Fluid properties", FluidPropertiesInputs,
                description="State properties of any CoolProp fluid from any two inputs.",
                reference="CoolProp (Bell et al., 2014); validated against IAPWS-95 steam table values",
-               tags=("properties", "steam", "refrigerant"))
+               tags=("properties", "steam", "refrigerant"), charts=_charts.fluid_properties_charts)
 def fluid_properties_tool(inp: FluidPropertiesInputs) -> FluidState:
     return fluid(inp.fluid).state(**{inp.input_1: inp.value_1, inp.input_2: inp.value_2})
 
@@ -63,25 +64,26 @@ class SaturatedTableInputs(BaseModel):
     start: float = Input(283.15, "", "Start (K or Pa)")
     stop: float = Input(473.15, "", "Stop (K or Pa)")
     points: int = Input(10, "", "Number of rows", ge=2, le=200)
-    formulation: Literal["IAPWS95", "IF97"] = Input("IAPWS95", "", "Formulation")
+    formulation: Literal["IF97", "IAPWS95"] = Input("IF97", "", "Formulation (IF97 = industrial standard)")
 
 
 @register_tool("thermo.saturated_steam_table", "Saturated steam table", SaturatedTableInputs,
                description="Saturated water/steam table by temperature or pressure (°C, kPa, kJ/kg).",
                reference="IAPWS-95 / IAPWS-IF97 via CoolProp; checked against Cengel & Boles Table A-4",
-               tags=("steam", "table"))
+               tags=("steam", "table"), charts=_charts.saturated_table_charts)
 def saturated_steam_table_tool(inp: SaturatedTableInputs) -> TableResult:
     import numpy as np
     values = np.linspace(inp.start, inp.stop, inp.points)
-    df = saturated_table(T=values, formulation=inp.formulation) if inp.by == "temperature" else \
-        saturated_table(P=values, formulation=inp.formulation)
-    return TableResult(columns=list(df.columns), rows=df.round(6).values.tolist(), n_rows=len(df))
+    columns, rows = saturated_rows(T=values, formulation=inp.formulation) if inp.by == "temperature" else \
+        saturated_rows(P=values, formulation=inp.formulation)
+    rows = [[round(v, 6) if isinstance(v, float) else v for v in row] for row in rows]
+    return TableResult(columns=columns, rows=rows, n_rows=len(rows))
 
 
 # ---------------- pipe pressure drop ----------------
 
 class PipePressureDropInputs(BaseModel):
-    fluid: str = Input("Water", "", "Fluid", json_schema_extra={"choices": "fluids"})
+    fluid: str = Input("IF97::Water", "", "Fluid", json_schema_extra={"choices": "fluids"})
     T: float = Input(293.15, "K", "Temperature", gt=0)
     P: float = Input(3e5, "Pa", "Pressure (absolute)", gt=0)
     mass_flow: float = Input(5.0, "kg/s", "Mass flow", gt=0)
@@ -104,7 +106,7 @@ class PipePressureDropInputs(BaseModel):
 @register_tool("thermo.pipe_pressure_drop", "Pipe pressure drop", PipePressureDropInputs,
                description="Friction (Colebrook), fittings (Crane K = f_T·L/D) and elevation pressure drop.",
                reference="Crane TP-410; Colebrook (1939); checked against Haaland explicit friction factor",
-               tags=("pipe", "pressure drop", "fluids"))
+               tags=("pipe", "pressure drop", "fluids"), charts=_charts.pipe_pressure_drop_charts)
 def pipe_pressure_drop_tool(inp: PipePressureDropInputs) -> PipeDropResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     fittings = {name: getattr(inp, field) for name, field in FITTING_FIELDS.items()}
@@ -133,7 +135,7 @@ class InsulationThicknessInputs(_InsulationBase):
 @register_tool("thermo.insulation_thickness", "Insulation thickness", InsulationThicknessInputs,
                description="Minimum insulation thickness for a target heat loss per metre of pipe.",
                reference="EN ISO 12241; Incropera ch. 3 & 9 (Churchill-Chu natural convection + radiation)",
-               tags=("insulation", "heat loss"))
+               tags=("insulation", "heat loss"), charts=_charts.insulation_thickness_charts)
 def insulation_thickness_tool(inp: InsulationThicknessInputs) -> InsulationResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     return insulation_thickness(size.id, size.od, inp.T_fluid, inp.T_ambient, inp.q_max, inp.insulation,
@@ -147,7 +149,7 @@ class InsulationHeatLossInputs(_InsulationBase):
 @register_tool("thermo.insulation_heat_loss", "Insulated pipe heat loss", InsulationHeatLossInputs,
                description="Heat loss and surface temperature for a given insulation thickness.",
                reference="EN ISO 12241; Incropera ch. 3 & 9 (Churchill-Chu natural convection + radiation)",
-               tags=("insulation", "heat loss"))
+               tags=("insulation", "heat loss"), charts=_charts.insulation_charts)
 def insulation_heat_loss_tool(inp: InsulationHeatLossInputs) -> InsulationResult:
     size = pipes.pipe(inp.dn, inp.schedule)
     return insulated_pipe_heat_loss(size.id, size.od, inp.thickness, inp.T_fluid, inp.T_ambient, inp.insulation,
@@ -162,14 +164,14 @@ class RefrigerationCycleInputs(BaseModel):
     T_cond: float = Input(313.15, "K", "Condensing temperature")
     compressor_power: float = Input(10e3, "W", "Compressor power", gt=0)
     isentropic_efficiency: float = Input(0.75, "", "Isentropic efficiency", gt=0, le=1)
-    superheat: float = Input(5.0, "K", "Evaporator superheat", ge=0)
-    subcooling: float = Input(3.0, "K", "Condenser subcooling", ge=0)
+    superheat: float = Input(5.0, "ΔK", "Evaporator superheat", ge=0)
+    subcooling: float = Input(3.0, "ΔK", "Condenser subcooling", ge=0)
 
 
 @register_tool("thermo.refrigeration_cycle", "Refrigeration / heat pump cycle", RefrigerationCycleInputs,
                description="Single-stage vapour-compression cycle: COP, capacities and states.",
                reference="Cengel & Boles, Thermodynamics, ch. 11; energy balance check",
-               tags=("heat pump", "refrigeration", "cycle"))
+               tags=("heat pump", "refrigeration", "cycle"), charts=_charts.refrigeration_cycle_charts)
 def refrigeration_cycle_tool(inp: RefrigerationCycleInputs) -> RefrigerationCycleResult:
     return refrigeration_cycle(inp.refrigerant, inp.T_evap, inp.T_cond, inp.compressor_power,
                                inp.isentropic_efficiency, inp.superheat, inp.subcooling)
@@ -182,7 +184,7 @@ class CoolingTowerInputs(BaseModel):
     T_hot_water: float = Input(304.15, "K", "Hot water inlet temperature")
     T_dry: float = Input(297.15, "K", "Ambient dry-bulb temperature")
     RH: float = Input(0.6, "", "Relative humidity (0-1)", ge=0, le=1)
-    approach: float = Input(3.0, "K", "Approach to wet bulb", gt=0)
+    approach: float = Input(3.0, "ΔK", "Approach to wet bulb", gt=0)
     cycles_of_concentration: float = Input(3.0, "", "Cycles of concentration", gt=1)
     altitude: float = Input(0.0, "m", "Site altitude", ge=0)
 

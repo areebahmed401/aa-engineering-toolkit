@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from engtoolkit.materials import fluid
+from engtoolkit.materials import AIR, fluid
 
 SIGMA = 5.670374419e-8  # Stefan-Boltzmann [W/(m²·K⁴)]
 G = 9.80665
@@ -59,7 +59,7 @@ def churchill_bernstein(Re: float, Pr: float) -> float:
         1 + (Re / 282000) ** (5 / 8)) ** (4 / 5)
 
 
-def rayleigh(T_surface: float, T_fluid: float, L: float, fluid_name: str = "Air", P: float = 101325.0) -> tuple[float, float, float]:
+def rayleigh(T_surface: float, T_fluid: float, L: float, fluid_name: str = AIR, P: float = 101325.0) -> tuple[float, float, float]:
     """Rayleigh number, film Prandtl number and film conductivity for natural convection."""
     T_film = 0.5 * (T_surface + T_fluid)
     s = fluid(fluid_name).state(T=T_film, P=P)
@@ -71,7 +71,7 @@ def rayleigh(T_surface: float, T_fluid: float, L: float, fluid_name: str = "Air"
 
 
 def natural_convection_horizontal_cylinder(T_surface: float, T_ambient: float, D: float,
-                                           fluid_name: str = "Air") -> float:
+                                           fluid_name: str = AIR) -> float:
     """h [W/(m²·K)] for a long horizontal cylinder in still air (Churchill & Chu, Ra < 1e12)."""
     if abs(T_surface - T_ambient) < 1e-9:
         return 0.0
@@ -81,7 +81,7 @@ def natural_convection_horizontal_cylinder(T_surface: float, T_ambient: float, D
 
 
 def natural_convection_vertical_plate(T_surface: float, T_ambient: float, L: float,
-                                      fluid_name: str = "Air") -> float:
+                                      fluid_name: str = AIR) -> float:
     """h [W/(m²·K)] for a vertical plate of height L (Churchill & Chu, all Ra)."""
     if abs(T_surface - T_ambient) < 1e-9:
         return 0.0
@@ -91,7 +91,7 @@ def natural_convection_vertical_plate(T_surface: float, T_ambient: float, L: flo
 
 
 def forced_convection_cylinder(velocity: float, T_surface: float, T_ambient: float, D: float,
-                               fluid_name: str = "Air", P: float = 101325.0) -> float:
+                               fluid_name: str = AIR, P: float = 101325.0) -> float:
     """h [W/(m²·K)] for a cylinder in cross-flow (e.g. wind on a pipe)."""
     s = fluid(fluid_name).state(T=0.5 * (T_surface + T_ambient), P=P)
     Re = s.rho * velocity * D / s.mu
