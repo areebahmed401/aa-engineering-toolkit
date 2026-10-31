@@ -164,8 +164,8 @@ class RefrigerationCycleInputs(BaseModel):
     T_cond: float = Input(313.15, "K", "Condensing temperature")
     compressor_power: float = Input(10e3, "W", "Compressor power", gt=0)
     isentropic_efficiency: float = Input(0.75, "", "Isentropic efficiency", gt=0, le=1)
-    superheat: float = Input(5.0, "K", "Evaporator superheat", ge=0)
-    subcooling: float = Input(3.0, "K", "Condenser subcooling", ge=0)
+    superheat: float = Input(5.0, "ΔK", "Evaporator superheat", ge=0)
+    subcooling: float = Input(3.0, "ΔK", "Condenser subcooling", ge=0)
 
 
 @register_tool("thermo.refrigeration_cycle", "Refrigeration / heat pump cycle", RefrigerationCycleInputs,
@@ -184,7 +184,7 @@ class CoolingTowerInputs(BaseModel):
     T_hot_water: float = Input(304.15, "K", "Hot water inlet temperature")
     T_dry: float = Input(297.15, "K", "Ambient dry-bulb temperature")
     RH: float = Input(0.6, "", "Relative humidity (0-1)", ge=0, le=1)
-    approach: float = Input(3.0, "K", "Approach to wet bulb", gt=0)
+    approach: float = Input(3.0, "ΔK", "Approach to wet bulb", gt=0)
     cycles_of_concentration: float = Input(3.0, "", "Cycles of concentration", gt=1)
     altitude: float = Input(0.0, "m", "Site altitude", ge=0)
 

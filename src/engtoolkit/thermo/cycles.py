@@ -38,7 +38,7 @@ class RefrigerationCycleResult(Result):
     P_condenser: float = rfield("Pa", "Condenser pressure")
     pressure_ratio: float = rfield("", "Pressure ratio")
     T_discharge: float = rfield("K", "Compressor discharge temperature")
-    temperature_lift: float = rfield("K", "Temperature lift")
+    temperature_lift: float = rfield("ΔK", "Temperature lift")
     states: list = rfield("", "Cycle states", default_factory=list, summary=False)
 
 

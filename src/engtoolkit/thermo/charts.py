@@ -97,7 +97,7 @@ def insulation_charts(inp, res, q_target: float | None = None) -> list[Chart]:
     if q_target is not None:
         series.append(Series("Target", [0, t_max], [q_target, q_target], dash=True, color=RED))
     return [Chart("insulation", "Heat loss vs insulation thickness", "Insulation thickness", "m",
-                  "Heat loss", "W/m", y2_label="Surface temperature", y2_unit="K", series=series)]
+                  "Heat loss", "W/m", y2_label="Surface temperature", y2_unit="K", log_y=True, series=series)]
 
 
 def insulation_thickness_charts(inp, res) -> list[Chart]:
