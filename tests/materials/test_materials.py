@@ -82,6 +82,32 @@ def test_incompressible_coolant():
     assert math.isnan(s.Q)
 
 
+def test_state_label_branches():
+    from engtoolkit.materials.fluids import state_label
+    assert state_label("twophase", 0.0) == "Saturated liquid"
+    assert state_label("liquid", 1.0) == "Saturated vapour"
+    assert state_label("twophase", 0.25) == "Saturated mixture (x = 0.250)"
+    assert state_label("twophase") == "Saturated mixture"
+    assert state_label("liquid") == "Compressed (subcooled) liquid"
+    assert state_label("gas") == "Superheated vapour"
+    assert state_label("supercritical") == "Supercritical fluid"
+    assert state_label("supercritical_gas") == "Gas (above critical temperature)"
+    assert state_label("supercritical_liquid") == "Compressed liquid (above critical pressure)"
+    assert state_label("critical_point") == "Critical point"
+    assert state_label("bogus") == ""
+
+
+def test_water_state_labels():
+    w = fluid("Water")
+    assert w.state(T=373.15, Q=0).state == "Saturated liquid"
+    assert w.state(T=373.15, Q=1).state == "Saturated vapour"
+    assert w.state(T=373.15, Q=0.4).state == "Saturated mixture (x = 0.400)"
+    assert w.state(T=300, P=1e5).state == "Compressed (subcooled) liquid"
+    assert w.state(T=500, P=1e5).state == "Superheated vapour"
+    assert w.state(T=700, P=30e6).state.startswith("Supercritical")
+    assert fluid("INCOMP::MEG[0.3]").state(T=300, P=2e5).state == "Liquid"
+
+
 # ---------------- catalogs ----------------
 
 def test_pipe_sizes_are_od_minus_two_walls():

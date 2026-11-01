@@ -46,6 +46,11 @@ def test_pipe_pressure_drop_hand_calc():
     assert flow.pressure_drop(Q) == pytest.approx(f * length / D * s.rho * v**2 / 2, rel=0.02)
 
 
+def test_pipe_drop_reports_fluid_state():
+    r = pipe_pressure_drop("Water", 293.0, 3e5, 0.05, 10, mass_flow=1.0)
+    assert r.fluid_state == "Compressed (subcooled) liquid"
+
+
 def test_crane_fitting_uses_fully_turbulent_f():
     flow = PipeFlow(Pipe(0.10226, 50.0, A106B), "Water", 293.15, 3e5)
     elbow = CraneMinorLoss("elbow_90_standard", flow)

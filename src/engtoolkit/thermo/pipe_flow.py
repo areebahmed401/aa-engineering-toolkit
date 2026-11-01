@@ -146,6 +146,7 @@ class PipeDropResult(Result):
     inner_diameter: float = rfield("m", "Inner diameter")
     volumetric_flow: float = rfield("m^3/s", "Volumetric flow")
     head_loss: float = rfield("m", "Friction + fittings head loss")
+    fluid_state: str = rfield("", "Fluid state", default="")
     fittings: dict = rfield("", "Fittings (count)", default_factory=dict, summary=False)
 
 
@@ -174,6 +175,7 @@ def pipe_pressure_drop(
         velocity=flow.velocity(Q), reynolds=Re, friction_factor=flow.friction_factor(Q), regime=regime,
         density=flow.density, inner_diameter=inner_diameter, volumetric_flow=Q,
         head_loss=(dp_fric + dp_fit) / (flow.density * G), fittings=fittings,
+        fluid_state=flow._state.state,
     )
 
 
