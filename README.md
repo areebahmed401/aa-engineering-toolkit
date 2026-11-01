@@ -48,7 +48,7 @@ which takes about a minute in the browser.
 | `engtoolkit.thermo` | Fluid properties, steam tables (IAPWS-95 / IF97), pipe pressure drop (Colebrook + Crane), heat transfer correlations, insulation sizing with natural convection + radiation, refrigeration/heat-pump cycle, psychrometrics, cooling towers, vacuum pumps |
 | `engtoolkit.structural` | Sections (rectangle, tubes, circle, I/H, C, T, Z, L, catalog profiles) with properties and outlines, determinacy check, equilibrium and 2D FEM (Euler-Bernoulli / Timoshenko), torsion and warping |
 | `engtoolkit.electrical` | Battery modelling: 1RC/2RC equivalent circuit with OCV-SOC and cut-offs (CC, CP, CC-CV, drive cycle), lumped thermal model with air or water-glycol cold-plate cooling, calendar/cycle aging (Wang 2011, Schmalstieg 2014), PyBaMM DFN/SPM with SEI and lithium plating (optional `[battery]` extra, precomputed for the browser) |
-| `engtoolkit.asme` | ASME VIII Div 1 vessel sizing — next phases |
+| `engtoolkit.asme` | ASME VIII Div 1 preliminary vessel sizing: UG-27 shells, UG-32/UG-34 heads, UG-37 nozzle reinforcement, UG-28 external pressure (user factor B), UG-99 hydrotest and a step-by-step vessel builder page. S is a user input; no code tables are reproduced |
 | `engtoolkit.core` | Units (SI inside, pint at the edges), result objects, the tool registry, plotting style |
 
 Every calculation the web app will expose is a registered **tool** with labelled, unit-tagged inputs
