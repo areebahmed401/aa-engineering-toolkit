@@ -4,7 +4,7 @@ Python package `engtoolkit` (src/) + React/Pyodide web app (web/) deployed to Gi
 Work is run with the user-level `kitchen-brigade` skill: only Chef commits, pushes and merges.
 
 ## Environment (Windows)
-- Python venv: `C:\Users\ahmed\.venvs\engineering-toolkit\Scripts\python.exe` (short path because of the 260-char limit inside OneDrive). Worktrees use `C:\Users\ahmed\.venvs\etk-<name>`.
+- Python venv: `C:\Users\ahmed\.venvs\engineering-toolkit\Scripts\python.exe` (short path because of the Windows 260-char limit; the repo lives at `C:\dev\engineering-toolkit`). Worktrees use `C:\Users\ahmed\.venvs\etk-<name>`.
 - Node: in PowerShell refresh PATH first:
   `$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")`
 - PowerShell 5.1 mangles quotes in `python -c "..."`: write a script file instead.
