@@ -195,7 +195,7 @@ export function StructuralPage() {
           <div className="flex rounded-xl border border-border bg-surface p-1 text-sm" role="tablist">
             {(["section", "beam"] as const).map((t) => (
               <button key={t} role="tab" aria-selected={tab === t} data-testid={`tab-${t}`}
-                className={cn("rounded-lg px-4 py-1.5 transition", tab === t ? "bg-primary text-white shadow-sm" : "text-muted hover:text-ink")}
+                className={cn("rounded-lg px-4 py-1.5 transition", tab === t ? "bg-primary text-on-primary shadow-sm" : "text-muted hover:text-ink")}
                 onClick={() => setTab(t)}>
                 {t === "section" ? "1 · Section" : "2 · Beam"}
               </button>
@@ -311,7 +311,7 @@ function SectionTab({ state, update, meta, profiles, metals, response, units }: 
           {meta.shapes.map((s) => (
             <button key={s} type="button" role="radio" aria-checked={shape === s} data-testid={`shape-${s}`} title={meta.labels[s]}
               className={cn("flex flex-col items-center gap-1 rounded-xl border p-2 text-[11px] leading-tight transition",
-                shape === s ? "border-primary bg-primary/10 text-primary" : "border-border text-muted hover:border-primary/50 hover:text-ink")}
+                shape === s ? "border-primary bg-primary/10 text-primary-ink" : "border-border text-muted hover:border-primary/50 hover:text-ink")}
               onClick={() => update((st) => ({ section: { ...st.section, shape: s } }))}>
               <svg viewBox="0 0 24 24" className="h-7 w-7"><path d={SHAPE_ICONS[s] ?? ""} fill="currentColor" fillRule="evenodd" opacity={0.85} /></svg>
               <span className="text-center">{meta.labels[s] ?? s}</span>
@@ -406,7 +406,7 @@ function BeamTab({ state, update, response, units, onEditSection }: {
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <Card title="Beam" aside={
-          <button type="button" className="text-xs text-primary hover:underline" onClick={onEditSection}>
+          <button type="button" className="text-xs text-primary-ink hover:underline" onClick={onEditSection}>
             Section: <span className="font-medium capitalize">{sectionName}</span> · {state.material} (edit)
           </button>}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -416,7 +416,7 @@ function BeamTab({ state, update, response, units, onEditSection }: {
               <div className="flex rounded-lg border border-border p-0.5 text-xs" role="group" aria-label="Beam theory">
                 {(["EB", "TB"] as const).map((t) => (
                   <button key={t} type="button" aria-pressed={beam.theory === t} data-testid={`theory-${t}`}
-                    className={cn("flex-1 rounded-md px-2 py-1.5 transition", beam.theory === t ? "bg-primary text-white" : "text-muted hover:text-ink")}
+                    className={cn("flex-1 rounded-md px-2 py-1.5 transition", beam.theory === t ? "bg-primary text-on-primary" : "text-muted hover:text-ink")}
                     onClick={() => setBeam({ theory: t })}>
                     {t === "EB" ? "Euler-Bernoulli" : "Timoshenko"}
                   </button>
@@ -429,7 +429,7 @@ function BeamTab({ state, update, response, units, onEditSection }: {
                 <div className="grid grid-cols-4 gap-1 rounded-lg border border-border p-0.5 text-xs" role="radiogroup" aria-label={side}>
                   {SUPPORTS.map((s) => (
                     <button key={s} type="button" role="radio" aria-checked={beam[side] === s} data-testid={`${side}-${s}`}
-                      className={cn("rounded-md px-1 py-1.5 transition", beam[side] === s ? "bg-primary text-white" : "text-muted hover:text-ink")}
+                      className={cn("rounded-md px-1 py-1.5 transition", beam[side] === s ? "bg-primary text-on-primary" : "text-muted hover:text-ink")}
                       onClick={() => setBeam({ [side]: s })}>
                       {SUPPORT_LABEL[s]}
                     </button>
@@ -483,7 +483,7 @@ function BeamTab({ state, update, response, units, onEditSection }: {
             <FbdDiagram beam={beam} fmt={fmt} reactions={reactions} />
           </div>
           <p className="mt-2 text-xs text-muted">
-            <span className="text-primary">■</span> applied loads · <span className="text-structural">■</span> UDL ·{" "}
+            <span className="text-primary-ink">■</span> applied loads · <span className="text-structural">■</span> UDL ·{" "}
             <span className="text-thermo">■</span> moments · <span className="text-ok">■</span> reactions (after calculation)
           </p>
         </Card>

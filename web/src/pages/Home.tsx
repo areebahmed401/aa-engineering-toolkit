@@ -14,10 +14,10 @@ export function Home() {
       <section className="relative overflow-hidden rounded-3xl border border-border bg-surface p-8 sm:p-12">
         <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full brand-gradient opacity-15 blur-3xl" />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-          <LogoMark size={72} />
+          <LogoMark size={72} ink="currentColor" />
           <div className="space-y-3">
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              <span className="bg-clip-text text-transparent brand-gradient">AA</span> Engineering Toolkit
+              <span className="text-primary-ink">AA</span> Engineering Toolkit
             </h1>
             <p className="max-w-2xl text-muted">
               Thermodynamics, fluids, structural, electrical and ASME calculations, running entirely in your browser.
@@ -67,7 +67,7 @@ export function Home() {
           { icon: ShieldCheck, title: "Validated", text: "Each tool has a test against a cited reference. Results are for preliminary design." },
         ].map(({ icon: I, title, text }) => (
           <div key={title} className="card p-5">
-            <I className="mb-2 h-5 w-5 text-primary" />
+            <I className="mb-2 h-5 w-5 text-primary-ink" />
             <h3 className="mb-1 text-sm font-semibold">{title}</h3>
             <p className="text-sm text-muted">{text}</p>
           </div>

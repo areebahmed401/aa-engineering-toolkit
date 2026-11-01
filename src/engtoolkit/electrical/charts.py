@@ -4,7 +4,7 @@ from __future__ import annotations
 from engtoolkit.core.charts import Chart, Series
 
 # one colour per C-rate / case, reused for the matching PyBaMM (dashed) curve
-PALETTE = ("#4F46E5", "#059669", "#D97706", "#DC2626", "#0891B2", "#7C3AED")
+PALETTE = ("#E0A800", "#3E9A5C", "#C8632B", "#DC2626", "#3D7EA6", "#7A64A8")
 
 
 def color(i: int) -> str:

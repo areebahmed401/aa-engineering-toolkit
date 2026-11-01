@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="branding/aa-wordmark.svg" alt="AA Engineering Toolkit" width="420">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/aa-wordmark-dark.svg">
+    <img src="branding/aa-wordmark.svg" alt="AA Engineering Toolkit" width="420">
+  </picture>
 </p>
 
 *Areeb Ahmed | Mechanical Engineer*

@@ -21,7 +21,7 @@ export default function App() {
               <Route path={`tool/${VESSEL_TOOL_ID}`} element={<VesselDesign />} />
               <Route path="tool/:toolId" element={<ToolPage />} />
               <Route path="structural" element={<StructuralPage />} />
-              <Route path="*" element={<div className="card p-6">Page not found. <Link className="text-primary underline" to="/">Home</Link></div>} />
+              <Route path="*" element={<div className="card p-6">Page not found. <Link className="text-primary-ink underline" to="/">Home</Link></div>} />
             </Route>
           </Routes>
         </HashRouter>

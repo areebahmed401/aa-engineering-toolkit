@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { CHART_SHAPE_FILL, CHART_SHAPE_LINE, chartColorway } from "../lib/brandColors";
 import { usePrefs } from "../lib/prefs";
 import type { ChartSpec } from "../lib/types";
 import { displayUnit, toDisplay, type UnitSystem } from "../lib/units";
@@ -40,8 +41,8 @@ export function ChartView({ chart }: { chart: ChartSpec }) {
       x: conv(s.points.map((p) => p[0]), chart.x_unit, units),
       y: conv(s.points.map((p) => p[1]), chart.y_unit, units),
       type: "scatter", mode: "lines", fill: "toself", hoverinfo: "skip", showlegend: false,
-      line: { color: "#4F46E5", width: 1.5 },
-      fillcolor: s.hole ? surface : "rgba(79,70,229,0.18)",
+      line: { color: CHART_SHAPE_LINE, width: 1.5 },
+      fillcolor: s.hole ? surface : CHART_SHAPE_FILL,
     }));
     for (const s of chart.series) {
       const yUnit = s.axis === "y2" ? chart.y2_unit : chart.y_unit;
@@ -60,6 +61,7 @@ export function ChartView({ chart }: { chart: ChartSpec }) {
     const axis = { gridcolor: grid, zerolinecolor: grid, linecolor: grid, color: ink };
     const layout: Record<string, unknown> = {
       title: { text: chart.title, font: { size: 14, color: ink }, x: 0.01, y: 0.97, yanchor: "top" },
+      colorway: chartColorway(theme),
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
       font: { family: "Inter, Segoe UI, sans-serif", color: ink, size: 12 },

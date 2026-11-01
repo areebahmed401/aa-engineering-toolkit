@@ -66,7 +66,7 @@ function Segmented({ options, value, onChange, testId }: {
             onClick={() => onChange(o.value)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
-              active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted hover:bg-bg",
+              active ? "border-primary bg-primary/10 text-primary-ink" : "border-border text-muted hover:bg-bg",
             )}
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -128,7 +128,7 @@ export function BatteryPage() {
     return (
       <div className="card p-6">
         <p className="mb-2 font-semibold">Tool not found</p>
-        <Link className="text-primary underline" to="/">Back to all tools</Link>
+        <Link className="text-primary-ink underline" to="/">Back to all tools</Link>
       </div>
     );
   }
@@ -186,7 +186,7 @@ export function BatteryPage() {
                 <span className="text-muted">{mode === "discharge_cp" ? "E-rates:" : "C-rates:"}</span>
                 {RATE_PRESETS.map((p) => (
                   <button key={p} type="button" onClick={() => set("c_rates", p)}
-                    className={cn("rounded-full border px-2 py-0.5", values.c_rates === p ? "border-primary text-primary" : "border-border text-muted hover:bg-bg")}>
+                    className={cn("rounded-full border px-2 py-0.5", values.c_rates === p ? "border-primary text-primary-ink" : "border-border text-muted hover:bg-bg")}>
                     {p}
                   </button>
                 ))}

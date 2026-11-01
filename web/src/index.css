@@ -4,17 +4,20 @@
 
 /* Theme tokens (RGB triplets) from branding/theme.json */
 :root {
-  --bg: 248 250 252;
+  --bg: 230 231 234;
   --surface: 255 255 255;
-  --border: 226 232 240;
-  --ink: 15 23 42;
-  --muted: 100 116 139;
-  --primary: 79 70 229;
-  --accent: 6 182 212;
-  --thermo: 249 115 22;
-  --structural: 14 165 233;
-  --electrical: 34 197 94;
-  --asme: 168 85 247;
+  --border: 207 209 214;
+  --ink: 17 18 20;
+  --muted: 94 97 104;
+  --primary: 224 168 0;
+  --primary-ink: 154 116 0; /* gold for TEXT on light surfaces */
+  --on-primary: 17 18 20; /* text on gold */
+  --header: 17 18 20;
+  --accent: 17 18 20;
+  --thermo: 200 99 43;
+  --structural: 61 126 166;
+  --electrical: 62 154 92;
+  --asme: 122 100 168;
   --ok: 22 163 74;
   --warn: 245 158 11;
   --fail: 220 38 38;
@@ -22,11 +25,14 @@
 }
 
 .dark {
-  --bg: 11 17 32;
-  --surface: 17 24 39;
-  --border: 31 41 55;
-  --ink: 226 232 240;
-  --muted: 148 163 184;
+  --bg: 27 28 31;
+  --surface: 38 39 43;
+  --border: 58 59 64;
+  --ink: 236 236 238;
+  --muted: 154 157 164;
+  --primary: 242 183 5;
+  --primary-ink: 242 183 5;
+  --accent: 255 255 255;
   color-scheme: dark;
 }
 
@@ -46,13 +52,13 @@
       disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-primary text-white shadow-sm hover:bg-primary/90;
+    @apply btn bg-primary text-on-primary shadow-sm hover:bg-primary/90;
   }
   .btn-ghost {
     @apply btn border border-border bg-surface text-ink hover:bg-bg;
   }
   .brand-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)));
+    background-image: linear-gradient(135deg, #f2b705, #c99400);
   }
 }
 
