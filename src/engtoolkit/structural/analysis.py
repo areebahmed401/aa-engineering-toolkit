@@ -30,6 +30,11 @@ class BeamAnalysisResult(Result):
     max_shear: float = rfield("N", "Max |shear force|", default=math.nan)
     max_bending_stress: float = rfield("Pa", "Max bending stress", default=math.nan)
     utilisation: float = rfield("", "Bending stress / yield", default=math.nan)
+    x_max_deflection: float = rfield("m", "Position of max |deflection|", default=math.nan)
+    x_max_moment: float = rfield("m", "Position of max |moment| (max bending stress)", default=math.nan)
+    x_max_shear: float = rfield("m", "Position of max |shear|", default=math.nan)
+    yield_strength: float = rfield("Pa", "Yield strength", default=math.nan)
+    section: str = rfield("", "Section", default="")
     x: list = rfield("m", "x (deflection)", default_factory=list, summary=False)
     deflection: list = rfield("m", "Deflection", default_factory=list, summary=False)
     slope: list = rfield("rad", "Slope", default_factory=list, summary=False)
@@ -76,14 +81,18 @@ def analyze_beam(beam, theory: str = "EB", n_elem: int = 200, force_fem: bool = 
         method = f"FEM ({'Euler-Bernoulli' if theory == 'EB' else 'Timoshenko'}, {n_elem} elements)"
 
     shape = beam.shape
-    M_max = float(np.max(np.abs(M)))
+    v, V, M = np.asarray(v), np.asarray(V), np.asarray(M)
+    i_v, i_V, i_M = int(np.argmax(np.abs(v))), int(np.argmax(np.abs(V))), int(np.argmax(np.abs(M)))
+    M_max = float(abs(M[i_M]))
     sigma = M_max * max(shape.c_top, shape.c_bottom) / shape.Iyy
     fy = beam.material.yield_strength
     return BeamAnalysisResult(
         verdict=verdict, method=method, degree_of_indeterminacy=degree,
         Ay=R.get("Ay", math.nan), MA=R.get("MA", math.nan), By=R.get("By", math.nan), MB=R.get("MB", math.nan),
-        max_deflection=float(np.max(np.abs(v))), max_moment=M_max, max_shear=float(np.max(np.abs(V))),
+        max_deflection=float(abs(v[i_v])), max_moment=M_max, max_shear=float(abs(V[i_V])),
         max_bending_stress=sigma, utilisation=sigma / fy if fy else math.nan,
+        x_max_deflection=float(np.asarray(x)[i_v]), x_max_moment=float(np.asarray(xi)[i_M]),
+        x_max_shear=float(np.asarray(xi)[i_V]), yield_strength=fy or math.nan, section=shape.name,
         x=np.asarray(x).tolist(), deflection=np.asarray(v).tolist(), slope=np.asarray(theta).tolist(),
         x_internal=np.asarray(xi).tolist(), shear=np.asarray(V).tolist(), moment=np.asarray(M).tolist(),
     )
