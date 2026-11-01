@@ -49,4 +49,11 @@ describe("formatting", () => {
     expect(inputString(453.15, "K", "SI")).toBe("180");
     expect(inputString(3e5, "Pa", "SI")).toBe("300");
   });
+
+  it("shows battery units", () => {
+    expect(displayUnit("Ah", "SI")).toBe("A·h");
+    expect(toDisplay(0.0234, "ohm", "SI")).toBeCloseTo(23.4);
+    expect(toDisplay(3600, "s", "SI")).toBeCloseTo(60);
+    expect(toDisplay(5000, "J", "SI")).toBeCloseTo(5);
+  });
 });

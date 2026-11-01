@@ -1,7 +1,8 @@
 # Electrical notebooks
 
-Battery modelling notebooks arrive with the electrical package (roadmap Phase 5): equivalent-circuit
-and PyBaMM models, thermal behaviour with coolant properties from `engtoolkit.materials.fluid`, and
-aging/degradation at different C-rates.
-
-PyBaMM is an optional extra: `pip install -e ".[battery]"`.
+- `01_ecm_thermal_aging.ipynb`: cell catalog, 2RC equivalent-circuit model, thermal coupling with air or
+  water-glycol cooling (h from `engtoolkit.thermo.heat_transfer`), aging correlations at different C-rates,
+  and the PyBaMM reference grid. Runs anywhere (NumPy only).
+- `02_pybamm.ipynb`: PyBaMM DFN vs the equivalent circuit, ECM fitting, SEI growth and lithium plating.
+  PyBaMM is an optional extra (`pip install -e ".[battery]"`); without it the notebook falls back to the
+  committed reference results.

@@ -63,6 +63,24 @@ test("shared link reproduces inputs and validation errors show on the field", as
   await expect(page.getByTestId("run-error")).toBeVisible();
 });
 
+test("battery page: cooling picker, several C-rates and PyBaMM overlay", async () => {
+  test.setTimeout(90_000);
+  await page.goto("./#/tool/electrical.battery_simulator");
+  await expect(page.getByRole("heading", { level: 1, name: "Battery cell simulator" })).toBeVisible();
+  await expect(page.getByLabel(/Liquid coolant/)).toHaveCount(0);
+  await page.getByTestId("battery-cooling").getByRole("radio", { name: "Cold plate" }).click();
+  await expect(page.getByLabel(/Liquid coolant/)).toBeVisible();
+  await page.getByRole("button", { name: "0.2, 0.5, 1" }).click();
+  await page.getByTestId("calculate").click();
+  await expect(page.getByTestId("results")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("run-error")).toHaveCount(0);
+  for (const id of ["voltage", "temperature", "soc", "heat", "capacity_fade"]) {
+    await expect(page.locator(`[data-testid="chart-${id}"] .main-svg`).first()).toBeVisible();
+  }
+  await expect(page.getByTestId("chart-voltage").getByText(/PyBaMM DFN 1C/).first()).toBeVisible();
+  await expect(page.getByText(/Mean heat \[W\/cell\]/)).toBeVisible();
+});
+
 test("vessel builder walks the steps, flags a failing design and downloads a report", async () => {
   await page.goto("./#/tool/asme.vessel_design");
   await expect(page.getByRole("heading", { level: 1, name: "Pressure vessel builder (VIII-1)" })).toBeVisible();
