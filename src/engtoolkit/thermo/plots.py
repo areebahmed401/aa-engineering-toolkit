@@ -48,7 +48,7 @@ def pipe_size_sweep_plot(rows, title: str = ""):
         ax1.plot(dn, [r.dp_total / 1e3 for r in rows], "o-", color="#E0A800", label="Pressure drop")
         ax1.set(xlabel="Pipe size DN", ylabel="Pressure drop [kPa]")
         ax2 = ax1.twinx()
-        ax2.plot(dn, [r.velocity for r in rows], "s--", color="#2B2D31", label="Velocity")
+        ax2.plot(dn, [r.velocity for r in rows], "s--", color="#2A9D8F", label="Velocity")
         ax2.set_ylabel("Velocity [m/s]")
         ax2.grid(False)
         ax3 = ax1.twinx()

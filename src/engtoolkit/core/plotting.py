@@ -4,7 +4,7 @@ from pathlib import Path
 
 STYLE_PATH = Path(__file__).resolve().parent / "aa.mplstyle"
 
-COLORS = ["#E0A800", "#2B2D31", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"]
+COLORS = ["#E0A800", "#2A9D8F", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"]
 DISCIPLINE_COLORS = {"thermo": "#C8632B", "structural": "#3D7EA6", "electrical": "#3E9A5C", "asme": "#7A64A8"}
 
 

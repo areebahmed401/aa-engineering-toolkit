@@ -10,7 +10,7 @@ from engtoolkit.materials import AIR, fluid
 from .insulation import insulated_pipe_heat_loss
 from .pipe_flow import pipe_pressure_drop
 
-PRIMARY, ACCENT, ORANGE, RED = "#E0A800", "#2B2D31", "#C8632B", "#DC2626"
+PRIMARY, ACCENT, ORANGE, RED = "#E0A800", "#2A9D8F", "#C8632B", "#DC2626"
 
 
 def saturation_dome(fluid_name: str, n: int = 50):

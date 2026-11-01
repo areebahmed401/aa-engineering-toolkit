@@ -5,7 +5,7 @@ import numpy as np
 
 from engtoolkit.core.charts import Chart, Series, Shape
 
-PRIMARY, ACCENT, ORANGE, BLUE = "#E0A800", "#2B2D31", "#C8632B", "#3D7EA6"
+PRIMARY, ACCENT, ORANGE, BLUE = "#E0A800", "#2A9D8F", "#C8632B", "#3D7EA6"
 
 
 def section_charts(section, res=None) -> list[Chart]:

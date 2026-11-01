@@ -1,7 +1,7 @@
 # AA Engineering Toolkit matplotlib style (colours from branding/theme.json)
 # Use in a notebook:  plt.style.use("../branding/aa.mplstyle")
 
-axes.prop_cycle : cycler('color', ['E0A800', '2B2D31', '3D7EA6', 'C8632B', '3E9A5C', '7A64A8', '8A8D93', '9A7400'])
+axes.prop_cycle : cycler('color', ['E0A800', '2A9D8F', '3D7EA6', 'C8632B', '3E9A5C', '7A64A8', '8A8D93', '9A7400'])
 axes.facecolor  : FFFFFF
 axes.edgecolor  : CFD1D6
 axes.labelcolor : 111214

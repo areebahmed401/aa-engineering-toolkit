@@ -12,7 +12,7 @@ from .div1.heads import flat_head, formed_head, head_depth
 from .div1.nozzles import nozzle_reinforcement
 from .div1.shells import cylinder_circumferential_t, cylinder_longitudinal_t, sphere_t
 
-PRIMARY, ACCENT, ORANGE, BLUE, GREY, PINK = "#E0A800", "#2B2D31", "#C8632B", "#3D7EA6", "#5E6168", "#7A64A8"
+PRIMARY, ACCENT, ORANGE, BLUE, GREY, PINK = "#E0A800", "#2A9D8F", "#C8632B", "#3D7EA6", "#8A8D93", "#7A64A8"
 HEAD_LABELS = {"ellipsoidal_2_1": "2:1 ellipsoidal", "ellipsoidal": "Ellipsoidal", "torispherical": "Torispherical",
                "hemispherical": "Hemispherical", "flat": "Flat"}
 

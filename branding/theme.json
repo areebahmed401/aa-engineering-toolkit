@@ -37,5 +37,5 @@
     "numeric": "JetBrains Mono"
   },
   "radius": "0.75rem",
-  "chart_colors": ["#E0A800", "#2B2D31", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"]
+  "chart_colors": ["#E0A800", "#2A9D8F", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"]
 }
