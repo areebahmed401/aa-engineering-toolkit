@@ -24,8 +24,38 @@ ShapeName = Literal["rectangle", "square_tube", "rectangular_tube", "circle", "h
                     "i_beam", "c_beam", "t_beam", "z_beam", "l_beam", "profile"]
 
 
+# Which SectionInputs dimensions each shape uses, with the label the dimension has for that shape.
+# Exported in the schema (json_schema_extra "shape_fields", as ordered [name, label] pairs since pydantic
+# sorts the keys of schema extras) so the web app shows only the relevant inputs.
+SHAPE_FIELDS: dict[str, dict[str, str]] = {
+    "rectangle": {"width": "Width b", "height": "Height h"},
+    "square_tube": {"width": "Outer width b", "thickness": "Wall thickness t"},
+    "rectangular_tube": {"width": "Outer width b", "height": "Outer height h", "thickness": "Wall thickness t"},
+    "circle": {"radius": "Radius r"},
+    "hollow_circle": {"radius": "Outer radius r", "inner_radius": "Inner radius ri"},
+    "i_beam": {"width": "Flange width b", "thickness": "Flange thickness tf",
+               "height": "Clear web height hw", "web_thickness": "Web thickness tw"},
+    "c_beam": {"width": "Flange width b", "thickness": "Flange thickness tf",
+               "height": "Clear web height hw", "web_thickness": "Web thickness tw"},
+    "t_beam": {"width": "Flange width b", "thickness": "Flange thickness tf",
+               "height": "Web height hw", "web_thickness": "Web thickness tw"},
+    "z_beam": {"width": "Flange width b", "thickness": "Flange thickness tf",
+               "height": "Clear web height hw", "web_thickness": "Web thickness tw"},
+    "l_beam": {"width": "Leg length b", "thickness": "Leg thickness t"},
+    "profile": {"profile": "Catalog profile"},
+}
+SHAPE_LABELS: dict[str, str] = {
+    "rectangle": "Rectangle", "square_tube": "Square tube", "rectangular_tube": "Rectangular tube",
+    "circle": "Circle", "hollow_circle": "Hollow circle", "i_beam": "I-beam", "c_beam": "Channel (C)",
+    "t_beam": "T-section", "z_beam": "Z-section", "l_beam": "Equal angle (L)", "profile": "Catalog IPE",
+}
+
+
 class SectionInputs(BaseModel):
-    shape: ShapeName = Input("i_beam", "", "Section shape")
+    shape: ShapeName = Input("i_beam", "", "Section shape",
+                             json_schema_extra={"shape_fields": {k: [list(p) for p in v.items()]
+                                                                 for k, v in SHAPE_FIELDS.items()},
+                                                "shape_labels": SHAPE_LABELS})
     profile: str = Input("IPE 200", "", "Catalog profile (shape = profile)", json_schema_extra={"choices": "profiles"})
     width: float = Input(0.1, "m", "Width / outer width / flange width / leg length", gt=0)
     height: float = Input(0.2, "m", "Height / outer height / clear web height", gt=0)
