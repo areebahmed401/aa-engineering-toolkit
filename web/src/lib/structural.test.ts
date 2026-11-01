@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BEAM_TOOL, beamInputs, defaultState, determinacy, fbdLayout, fitSection, fromToolInputs, loadErrors, mergeState,
-  momentArc, SECTION_TOOL, sectionInputs, shapeMeta, stateDiff, type BeamValues, type FbdFormat,
+  momentArc, SECTION_TOOL, sectionInputs, shapeMeta, stateDiff, stressAt, TORSION_TOOL, torsionError, torsionInputs,
+  type BeamValues, type FbdFormat,
 } from "./structural";
 import type { ToolSchema } from "./types";
 
@@ -63,6 +64,37 @@ describe("state", () => {
     expect(fromToolInputs(BEAM_TOOL, { length: 3, section: { shape: "rectangle" } }))
       .toEqual({ section: { shape: "rectangle" }, beam: { length: 3 } });
     expect(fromToolInputs(BEAM_TOOL, {})).toEqual({});
+  });
+
+  it("keeps old section/beam URLs decoding the same and adds torsion defaults", () => {
+    expect(defaults.torsion).toEqual({ length: 1, torque: 200, position: 1 });
+    expect(mergeState(defaults, { section: { width: 0.2 }, beam: { length: 6 } })).toEqual({
+      ...defaults, section: { ...defaults.section, width: 0.2 }, beam: { ...defaults.beam, length: 6 },
+    });
+  });
+
+  it("round-trips torsion values and builds torsion inputs", () => {
+    const changed = { ...defaults, material: "Aluminium 6061-T6", torsion: { length: 2, torque: 500, position: 1.5 } };
+    const diff = stateDiff(changed, defaults);
+    expect(diff).toEqual({ material: "Aluminium 6061-T6", torsion: { length: 2, torque: 500, position: 1.5 } });
+    expect(mergeState(defaults, diff)).toEqual(changed);
+    expect(torsionInputs(changed)).toEqual({
+      section: defaults.section, material: "Aluminium 6061-T6", length: 2, torque: 500, position: 1.5,
+    });
+    const custom = defaultState(sectionDefaults, beamDefaults, { section: {}, material: "Steel", length: 3, torque: 10, position: 3 });
+    expect(custom.torsion).toEqual({ length: 3, torque: 10, position: 3 });
+  });
+
+  it("converts old torsion links", () => {
+    expect(fromToolInputs(TORSION_TOOL, { section: { shape: "c_beam" }, material: "Steel", length: 2, torque: 50 }))
+      .toEqual({ section: { shape: "c_beam" }, material: "Steel", torsion: { length: 2, torque: 50 } });
+    expect(fromToolInputs(TORSION_TOOL, {})).toEqual({});
+  });
+
+  it("requires the torsion position to lie within the length", () => {
+    expect(torsionError({ length: 2, torque: 1, position: 2 })).toBeNull();
+    expect(torsionError({ length: 2, torque: 1, position: 2.5 })).toMatch(/within/);
+    expect(torsionError({ length: 0, torque: 1, position: 0 })).toMatch(/positive/);
   });
 
   it("reads shape fields from the schema hint", () => {
@@ -128,5 +160,27 @@ describe("geometry helpers", () => {
     const [x1, y1] = map([0.1, 0.2]);
     expect(y1).toBeLessThan(y0);
     expect((y0 - y1) / (x1 - x0)).toBeCloseTo(2);
+  });
+});
+
+describe("stressAt", () => {
+  const xs = [0, 1, 3];
+  const top = [10, 20, -20];
+  const bottom = [-10, -20, 20];
+  it("returns the end values at and beyond the ends", () => {
+    expect(stressAt(0, xs, top, bottom)).toEqual({ top: 10, bottom: -10 });
+    expect(stressAt(-1, xs, top, bottom)).toEqual({ top: 10, bottom: -10 });
+    expect(stressAt(3, xs, top, bottom)).toEqual({ top: -20, bottom: 20 });
+    expect(stressAt(9, xs, top, bottom)).toEqual({ top: -20, bottom: 20 });
+  });
+  it("interpolates linearly between stations and keeps signs opposite", () => {
+    expect(stressAt(0.5, xs, top, bottom)).toEqual({ top: 15, bottom: -15 });
+    const m = stressAt(2, xs, top, bottom);
+    expect(m.top).toBeCloseTo(0);
+    expect(m.bottom).toBeCloseTo(0);
+    expect(stressAt(2.5, xs, top, bottom).top).toBeLessThan(0);
+  });
+  it("copes with empty input", () => {
+    expect(stressAt(1, [], [], []).top).toBeNaN();
   });
 });

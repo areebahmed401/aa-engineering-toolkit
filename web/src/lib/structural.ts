@@ -4,6 +4,7 @@ import type { JsonSchema, ToolSchema } from "./types";
 
 export const SECTION_TOOL = "structural.section_properties";
 export const BEAM_TOOL = "structural.beam_analysis";
+export const TORSION_TOOL = "structural.torsion";
 
 export type SupportKind = "fixed" | "pinned" | "roller" | "free";
 export type LoadKind = "point" | "udl" | "moment";
@@ -18,8 +19,11 @@ export type BeamValues = {
   theory: "EB" | "TB";
   n_elem: number;
 };
-/** Everything the page edits: the section and material are shared by both tabs. */
-export type StructuralState = { section: SectionValues; material: string; beam: BeamValues };
+export type TorsionValues = { length: number; torque: number; position: number };
+/** Everything the page edits: the section and material are shared by all tabs. */
+export type StructuralState = { section: SectionValues; material: string; beam: BeamValues; torsion: TorsionValues };
+
+const TORSION_DEFAULTS: TorsionValues = { length: 1, torque: 200, position: 1 };
 
 export const SUPPORTS: SupportKind[] = ["fixed", "pinned", "roller", "free"];
 export const LOAD_UNITS: Record<LoadKind, string> = { point: "N", udl: "N/m", moment: "N·m" };
@@ -52,13 +56,21 @@ export function beamInputs(s: StructuralState): Record<string, unknown> {
   return { section: s.section, material: s.material, ...s.beam };
 }
 
-/** Page defaults from the two tools' schema defaults. */
-export function defaultState(sectionDefaults: Record<string, unknown>, beamDefaults: Record<string, unknown>): StructuralState {
+export function torsionInputs(s: StructuralState): Record<string, unknown> {
+  return { section: s.section, material: s.material, ...s.torsion };
+}
+
+/** Page defaults from the tools' schema defaults. */
+export function defaultState(
+  sectionDefaults: Record<string, unknown>, beamDefaults: Record<string, unknown>, torsionDefaults: Record<string, unknown> = {},
+): StructuralState {
   const { section, material, ...beam } = beamDefaults;
+  const { section: _s, material: _m, ...torsion } = torsionDefaults;
   return {
     section: { ...(section as SectionValues) },
     material: String(material ?? sectionDefaults.material ?? "Steel"),
     beam: beam as unknown as BeamValues,
+    torsion: { ...TORSION_DEFAULTS, ...torsion } as TorsionValues,
   };
 }
 
@@ -69,6 +81,7 @@ export function mergeState(defaults: StructuralState, partial: Record<string, un
     section: { ...defaults.section, ...(p.section ?? {}) },
     material: typeof p.material === "string" ? p.material : defaults.material,
     beam: { ...defaults.beam, ...(p.beam ?? {}) },
+    torsion: { ...defaults.torsion, ...(p.torsion ?? {}) },
   };
 }
 
@@ -85,6 +98,8 @@ export function stateDiff(state: StructuralState, defaults: StructuralState): Re
   if (Object.keys(sec).length) out.section = sec;
   if (state.material !== defaults.material) out.material = state.material;
   if (Object.keys(beam).length) out.beam = beam;
+  const torsion = diff(state.torsion as unknown as Record<string, unknown>, defaults.torsion as unknown as Record<string, unknown>);
+  if (Object.keys(torsion).length) out.torsion = torsion;
   return out;
 }
 
@@ -94,12 +109,20 @@ export function fromToolInputs(toolId: string, values: Record<string, unknown>):
     const { material, ...section } = values;
     return { ...(Object.keys(section).length ? { section } : {}), ...(material !== undefined ? { material } : {}) };
   }
-  const { section, material, ...beam } = values;
+  const { section, material, ...rest } = values;
+  const key = toolId === TORSION_TOOL ? "torsion" : "beam";
   return {
     ...(section !== undefined ? { section } : {}),
     ...(material !== undefined ? { material } : {}),
-    ...(Object.keys(beam).length ? { beam } : {}),
+    ...(Object.keys(rest).length ? { [key]: rest } : {}),
   };
+}
+
+/** Torsion needs the evaluation point to lie on the member: returns an error message or null. */
+export function torsionError(t: TorsionValues): string | null {
+  if (!(t.length > 0)) return "Length must be positive";
+  if (!(t.position >= 0) || t.position > t.length) return "Position must be within the length";
+  return null;
 }
 
 // ---------------- determinacy (mirrors structural.loads.static_determinacy) ----------------
@@ -299,4 +322,19 @@ export function fitSection(polys: Point[][], w: number, h: number, margin: numbe
 
 export function polygonPath(points: Point[]): string {
   return points.map((p, i) => `${i ? "L" : "M"} ${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" ") + " Z";
+}
+
+// ---------------- bending stress at a station ----------------
+
+/** Fibre stresses at x, linearly interpolated between the solver's stations (clamped at the ends). */
+export function stressAt(x: number, xs: number[], top: number[], bottom: number[]): { top: number; bottom: number } {
+  const n = Math.min(xs.length, top.length, bottom.length);
+  if (n === 0) return { top: NaN, bottom: NaN };
+  if (n === 1 || x <= xs[0]) return { top: top[0], bottom: bottom[0] };
+  if (x >= xs[n - 1]) return { top: top[n - 1], bottom: bottom[n - 1] };
+  let i = 1;
+  while (i < n - 1 && xs[i] < x) i++;
+  const span = xs[i] - xs[i - 1];
+  const f = span > 0 ? (x - xs[i - 1]) / span : 0;
+  return { top: top[i - 1] + f * (top[i] - top[i - 1]), bottom: bottom[i - 1] + f * (bottom[i] - bottom[i - 1]) };
 }

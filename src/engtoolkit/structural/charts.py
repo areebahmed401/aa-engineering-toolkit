@@ -17,8 +17,8 @@ def section_charts(section, res=None) -> list[Chart]:
     ])]
 
 
-def beam_charts(inp, res) -> list[Chart]:
-    return [
+def beam_charts(inp, res, section=None) -> list[Chart]:
+    charts = [
         Chart("deflection", "Deflection", "x", "m", "Deflection", "m",
               series=[Series("Deflection", res.x, res.deflection, color=PRIMARY)]),
         Chart("slope", "Slope", "x", "m", "Slope", "rad",
@@ -28,6 +28,23 @@ def beam_charts(inp, res) -> list[Chart]:
         Chart("moment", "Bending moment (sagging +)", "x", "m", "Moment", "N·m",
               series=[Series("Moment", res.x_internal, res.moment, fill=True, color=ORANGE)]),
     ]
+    if section is not None:
+        charts.append(section_charts(section)[0])
+        charts.append(_bending_stress_chart(section, res))
+    return charts
+
+
+def _bending_stress_chart(section, res) -> Chart:
+    """Linear bending stress over the depth at the section of maximum |M| (strong axis, tension +)."""
+    x0 = res.x_max_moment
+    M = float(np.interp(x0, res.x_internal, res.moment))
+    y = [-section.c_bottom, section.c_top]
+    sigma = [-M * v / section.Iyy for v in y]
+    return Chart("bending_stress", f"Bending stress across the section at x = {x0:.3g} m (tension +)",
+                 "Stress", "Pa", "y", "m", series=[
+                     Series("Bending stress", sigma, y, fill=True, color=ORANGE),
+                     Series("Neutral axis", [0.0, 0.0], y, dash=True, color=BLUE),
+                 ])
 
 
 def torsion_charts(beam, torque, res) -> list[Chart]:
@@ -38,4 +55,5 @@ def torsion_charts(beam, torque, res) -> list[Chart]:
     if beam.shape.C_torsion > 0:
         t = Torsion(beam, torque, beam.length)
         series.insert(0, Series("With warping restraint", x, [t.theta(xi / beam.length) for xi in x], color=PRIMARY))
-    return [Chart("twist", "Twist along the cantilever", "x", "m", "Twist", "rad", series=series)]
+    return [Chart("twist", "Twist along the cantilever", "x", "m", "Twist", "rad", series=series),
+            section_charts(beam.shape)[0]]

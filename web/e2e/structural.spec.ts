@@ -87,3 +87,42 @@ test("a mechanism is flagged and not solved", async () => {
   await expect(page.getByTestId("determinacy")).toHaveAttribute("data-status", "mechanism");
   await expect(page.getByTestId("calculate")).toBeDisabled();
 });
+
+test("old torsion links open the torsion tab, which shows the section and a twist", async () => {
+  await page.goto("./#/tool/structural.torsion");
+  await expect(page).toHaveURL(/#\/structural\?tab=torsion/);
+  await expect(page.getByTestId("tab-torsion")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("section-drawing")).toBeVisible();
+  await expect(page.getByTestId("marker-centroid")).toBeVisible();
+  await expect(page.getByTestId("result-twist_deg")).toContainText("°");
+  await expect(page.getByTestId("result-max_shear_stress")).toContainText("MPa");
+  await expect(page.locator('[data-testid="chart-twist"] .main-svg').first()).toBeVisible();
+
+  // the evaluation point must lie on the member
+  await page.getByTestId("field-position").fill("5000");
+  await expect(page.getByTestId("torsion-error")).toBeVisible();
+  await expect(page.getByTestId("calculate")).toBeDisabled();
+});
+
+test("beam tab shows bending stress across the section; cantilever hogs (top in tension at the wall)", async () => {
+  await page.goto("./#/"); // unmount the page so the torsion test's inputs do not carry over
+  await page.goto("./#/structural?tab=beam");
+  await page.getByTestId("left_support-fixed").click();
+  await page.getByTestId("right_support-free").click();
+  await page.getByTestId("load-0-kind").selectOption("point");
+  await page.getByTestId("field-length").fill("4");
+  await page.getByTestId("load-0-value").fill("10");
+  await page.getByTestId("load-0-x").fill("4"); // tip load
+  await page.getByTestId("calculate").click();
+
+  await expect(page.getByTestId("stress-section")).toBeVisible();
+  // peak moment is at the fixed end: x = 0, top fibre in tension
+  await expect(page.getByTestId("stress-x-readout")).toContainText("x = 0 ");
+  await expect(page.getByTestId("stress-top-label")).toContainText("T");
+  const atWall = await page.getByTestId("stress-top-value").innerText();
+  expect(atWall.startsWith("-")).toBe(false); // tension is positive
+
+  const slider = page.getByTestId("stress-x");
+  await slider.fill(String(await slider.getAttribute("max")));
+  await expect(page.getByTestId("stress-top-value")).not.toHaveText(atWall);
+});

@@ -35,12 +35,18 @@ class BeamAnalysisResult(Result):
     x_max_shear: float = rfield("m", "Position of max |shear|", default=math.nan)
     yield_strength: float = rfield("Pa", "Yield strength", default=math.nan)
     section: str = rfield("", "Section", default="")
+    c_top: float = rfield("m", "Centroid to top fibre", default=math.nan)
+    c_bottom: float = rfield("m", "Centroid to bottom fibre", default=math.nan)
     x: list = rfield("m", "x (deflection)", default_factory=list, summary=False)
     deflection: list = rfield("m", "Deflection", default_factory=list, summary=False)
     slope: list = rfield("rad", "Slope", default_factory=list, summary=False)
     x_internal: list = rfield("m", "x (internal forces)", default_factory=list, summary=False)
     shear: list = rfield("N", "Shear force", default_factory=list, summary=False)
     moment: list = rfield("N·m", "Bending moment", default_factory=list, summary=False)
+    # Strong-axis (Iyy) bending only, tension positive; sagging M > 0 compresses the top fibre.
+    # Unsymmetric sections (Z, L) also have Iyz and would bend about a tilted axis: not captured here.
+    sigma_top: list = rfield("Pa", "Top fibre bending stress", default_factory=list, summary=False)
+    sigma_bottom: list = rfield("Pa", "Bottom fibre bending stress", default_factory=list, summary=False)
 
     def plot(self):
         from .plots import beam_results_plot
@@ -93,6 +99,8 @@ def analyze_beam(beam, theory: str = "EB", n_elem: int = 200, force_fem: bool = 
         max_bending_stress=sigma, utilisation=sigma / fy if fy else math.nan,
         x_max_deflection=float(np.asarray(x)[i_v]), x_max_moment=float(np.asarray(xi)[i_M]),
         x_max_shear=float(np.asarray(xi)[i_V]), yield_strength=fy or math.nan, section=shape.name,
+        c_top=float(shape.c_top), c_bottom=float(shape.c_bottom),
         x=np.asarray(x).tolist(), deflection=np.asarray(v).tolist(), slope=np.asarray(theta).tolist(),
         x_internal=np.asarray(xi).tolist(), shear=np.asarray(V).tolist(), moment=np.asarray(M).tolist(),
+        sigma_top=(-M * shape.c_top / shape.Iyy).tolist(), sigma_bottom=(M * shape.c_bottom / shape.Iyy).tolist(),
     )

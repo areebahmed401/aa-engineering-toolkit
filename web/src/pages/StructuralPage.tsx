@@ -1,5 +1,5 @@
-// Dedicated structural page: section designer + beam builder with a live free-body diagram.
-// All numbers come from the Python tools structural.section_properties and structural.beam_analysis.
+// Dedicated structural page: section designer + beam builder with a live free-body diagram + torsion of a cantilever.
+// All numbers come from the Python tools structural.section_properties, structural.beam_analysis and structural.torsion.
 import { BookOpen, Calculator, Check, CircleAlert, CircleCheck, FileDown, Link2, Plus, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
@@ -7,6 +7,7 @@ import { ChartView } from "../components/ChartView";
 import { FbdDiagram } from "../components/FbdDiagram";
 import { NumberInput, type Conversion } from "../components/NumberInput";
 import { SectionDrawing } from "../components/SectionDrawing";
+import { StressSection } from "../components/StressSection";
 import { cn, SECTION_META, Spinner } from "../components/ui";
 import { useEngine } from "../lib/engine";
 import { usePrefs } from "../lib/prefs";
@@ -14,16 +15,17 @@ import { download, markdownReport } from "../lib/report";
 import { defaultValues, fieldsFromSchema } from "../lib/schema";
 import {
   BEAM_TOOL, beamInputs, defaultState, determinacy, fromToolInputs, LOAD_UNITS, loadErrors, mergeState, SECTION_TOOL,
-  sectionInputs, shapeMeta, stateDiff, SUPPORTS, type BeamValues, type FbdFormat, type Load, type LoadKind,
+  sectionInputs, shapeMeta, stateDiff, stressAt, SUPPORTS, TORSION_TOOL, torsionError, torsionInputs, type BeamValues, type FbdFormat, type Load, type LoadKind,
   type Reactions, type StructuralState, type SupportKind,
 } from "../lib/structural";
 import type { ResultField, RunResponse } from "../lib/types";
 import { decodeInputs, encodeInputs } from "../lib/urlState";
 import { displayUnit, formatNumber, toDisplay, toSI, type UnitSystem } from "../lib/units";
 
-type Tab = "section" | "beam";
-const TOOL_OF: Record<Tab, string> = { section: SECTION_TOOL, beam: BEAM_TOOL };
-const TAB_OF: Record<string, Tab> = { [SECTION_TOOL]: "section", [BEAM_TOOL]: "beam" };
+type Tab = "section" | "beam" | "torsion";
+const TOOL_OF: Record<Tab, string> = { section: SECTION_TOOL, beam: BEAM_TOOL, torsion: TORSION_TOOL };
+const TAB_OF: Record<string, Tab> = { [SECTION_TOOL]: "section", [BEAM_TOOL]: "beam", [TORSION_TOOL]: "torsion" };
+const TAB_LABEL: Record<Tab, string> = { section: "1 · Section", beam: "2 · Beam", torsion: "3 · Torsion" };
 
 /** Tools that open this page instead of the generic form. */
 export const STRUCTURAL_PAGE_TOOLS = new Set(Object.keys(TAB_OF));
@@ -70,16 +72,20 @@ export function StructuralPage() {
   const [params, setParams] = useSearchParams();
   const { schema, choices, progress, run } = useEngine();
   const { units } = usePrefs();
-  const tab: Tab = params.get("tab") === "beam" ? "beam" : "section";
+  const tabParam = params.get("tab");
+  const tab: Tab = tabParam === "beam" || tabParam === "torsion" ? tabParam : "section";
   const urlI = params.get("i");
 
   const sectionTool = schema?.tools.find((t) => t.id === SECTION_TOOL);
   const beamTool = schema?.tools.find((t) => t.id === BEAM_TOOL);
+  const torsionTool = schema?.tools.find((t) => t.id === TORSION_TOOL);
   const sectionFields = useMemo(() => (sectionTool ? fieldsFromSchema(sectionTool.inputs) : []), [sectionTool]);
   const beamFields = useMemo(() => (beamTool ? fieldsFromSchema(beamTool.inputs) : []), [beamTool]);
+  const torsionFields = useMemo(() => (torsionTool ? fieldsFromSchema(torsionTool.inputs) : []), [torsionTool]);
   const defaults = useMemo(
-    () => (sectionTool && beamTool ? defaultState(defaultValues(sectionFields), defaultValues(beamFields)) : null),
-    [sectionTool, beamTool, sectionFields, beamFields],
+    () => (sectionTool && beamTool && torsionTool
+      ? defaultState(defaultValues(sectionFields), defaultValues(beamFields), defaultValues(torsionFields)) : null),
+    [sectionTool, beamTool, torsionTool, sectionFields, beamFields, torsionFields],
   );
   const meta = useMemo(() => shapeMeta(sectionTool), [sectionTool]);
 
@@ -119,7 +125,7 @@ export function StructuralPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encoded]);
 
-  const inputsFor = useCallback((t: Tab, s: StructuralState) => (t === "section" ? sectionInputs(s) : beamInputs(s)), []);
+  const inputsFor = useCallback((t: Tab, s: StructuralState) => (t === "section" ? sectionInputs(s) : t === "beam" ? beamInputs(s) : torsionInputs(s)), []);
 
   const blocked = useMemo(() => {
     if (!state) return true;
@@ -127,6 +133,7 @@ export function StructuralPage() {
       return determinacy(state.beam.left_support, state.beam.right_support).status === "mechanism"
         || Object.keys(loadErrors(state.beam)).length > 0 || !(state.beam.length > 0);
     }
+    if (tab === "torsion") return torsionError(state.torsion) !== null;
     return false;
   }, [state, tab]);
 
@@ -150,11 +157,11 @@ export function StructuralPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, tab, ready, blocked]);
 
-  if (!schema || !sectionTool || !beamTool || !state || !defaults) {
+  if (!schema || !sectionTool || !beamTool || !torsionTool || !state || !defaults) {
     return <div className="flex items-center gap-2 text-muted"><Spinner /> Loading tools…</div>;
   }
 
-  const tool = tab === "section" ? sectionTool : beamTool;
+  const tool = tab === "section" ? sectionTool : tab === "beam" ? beamTool : torsionTool;
   const current = stored[tab];
   const response = current?.res ?? null;
   const stale = current ? current.key !== key : false;
@@ -175,7 +182,7 @@ export function StructuralPage() {
   };
   const exportReport = () => {
     if (!response?.ok) return;
-    const fields = tab === "section" ? sectionFields : beamFields;
+    const fields = tab === "section" ? sectionFields : tab === "beam" ? beamFields : torsionFields;
     const md = markdownReport({ tool, fields, values: inputsFor(tab, state), results: response.result.fields, system: units, version: schema.version, link: link() });
     download(`${tool.id}.md`, md, "text/markdown");
   };
@@ -193,11 +200,11 @@ export function StructuralPage() {
             <p className="max-w-3xl text-muted">{tool.description}</p>
           </div>
           <div className="flex rounded-xl border border-border bg-surface p-1 text-sm" role="tablist">
-            {(["section", "beam"] as const).map((t) => (
+            {(["section", "beam", "torsion"] as const).map((t) => (
               <button key={t} role="tab" aria-selected={tab === t} data-testid={`tab-${t}`}
                 className={cn("rounded-lg px-4 py-1.5 transition", tab === t ? "bg-primary text-on-primary shadow-sm" : "text-muted hover:text-ink")}
                 onClick={() => setTab(t)}>
-                {t === "section" ? "1 · Section" : "2 · Beam"}
+                {TAB_LABEL[t]}
               </button>
             ))}
           </div>
@@ -206,7 +213,9 @@ export function StructuralPage() {
 
       {tab === "section"
         ? <SectionTab state={state} update={update} meta={meta} profiles={choices?.profiles ?? []} metals={choices?.materials.metal ?? []} response={response} units={units} />
-        : <BeamTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />}
+        : tab === "beam"
+          ? <BeamTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />
+          : <TorsionTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn-primary" disabled={busy || blocked} data-testid="calculate" onClick={() => void calculate(tab, state)}>
@@ -223,7 +232,7 @@ export function StructuralPage() {
           <FileDown className="h-4 w-4" /> Report
         </button>
         <span className="text-xs text-muted">
-          {blocked ? "Fix the beam inputs above to see results."
+          {blocked ? `Fix the ${tab} inputs above to see results.`
             : !ready && progress.stage !== "error" ? `Python is loading (${progress.percent}%); results appear when it is ready.`
             : response?.ok ? `Updates live as you edit · ${response.elapsed_ms} ms${stale ? " · updating…" : ""}` : "Updates live as you edit"}
         </span>
@@ -561,7 +570,7 @@ function BeamResults({ response, units }: { response: RunResponse | null; units:
         </Card>
         <Card title="Bending stress">
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="Max bending stress σ" value={show("max_bending_stress", stressConv(units))} sub={at("x_max_moment")} testId="result-max_bending_stress" />
+            <Stat label="Max bending stress" value={show("max_bending_stress", stressConv(units))} sub={at("x_max_moment")} testId="result-max_bending_stress" />
             <Stat label="Yield strength fy" value={show("yield_strength", stressConv(units))} />
           </div>
           <div className="mt-3" data-testid="result-utilisation">
@@ -577,12 +586,136 @@ function BeamResults({ response, units }: { response: RunResponse | null; units:
         </Card>
       </div>
 
-      {response.charts.length > 0 && (
+      <StressCard key={String(num("x_max_moment"))} response={response} units={units} />
+
+      {response.charts.some((c) => !SECTION_CHARTS.has(c.id)) && (
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {response.charts.map((c) => (
+          {response.charts.filter((c) => !SECTION_CHARTS.has(c.id)).map((c) => (
             <div key={c.id} className="card p-3"><ChartView chart={c} /></div>
           ))}
         </section>
+      )}
+    </div>
+  );
+}
+
+/** Drawn by the SVG components instead of the generic chart grid. */
+const SECTION_CHARTS = new Set(["section", "bending_stress"]);
+
+const arr = (v: unknown): number[] => (Array.isArray(v) ? (v as number[]) : []);
+
+function StressCard({ response, units }: { response: Extract<RunResponse, { ok: true }>; units: UnitSystem }) {
+  const r = fieldMap(response.result.fields);
+  const xs = arr(r.x_internal?.value);
+  const sTop = arr(r.sigma_top?.value);
+  const sBot = arr(r.sigma_bottom?.value);
+  const moments = arr(r.moment?.value);
+  const cTop = r.c_top?.value as number;
+  const cBottom = r.c_bottom?.value as number;
+  const chart = response.charts.find((c) => c.id === "section");
+  const xMax = typeof r.x_max_moment?.value === "number" ? r.x_max_moment.value : 0;
+  const [pick, setPick] = useState<number | null>(null);
+  const span = unitConv("m", units);
+  const stress = stressConv(units);
+  if (!chart || xs.length < 2 || sTop.length !== xs.length || sBot.length !== xs.length) return null;
+
+  const x0 = xs[0];
+  const x1 = xs[xs.length - 1];
+  const x = Math.min(x1, Math.max(x0, pick ?? xMax));
+  const s = stressAt(x, xs, sTop, sBot);
+  const m = stressAt(x, xs, moments, moments).top;
+  const moment = unitConv("N·m", units);
+  const small = smallLength(units);
+  const fmtStress = (pa: number) => `${formatNumber(stress.fromSI(pa))} ${stress.unit}`;
+
+  return (
+    <Card title="Bending stress across the section">
+      <div className="mb-4 grid grid-cols-1 items-center gap-x-6 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <label className="block">
+          <span className="label">Position along the beam</span>
+          <input type="range" className="w-full accent-primary" min={x0} max={x1} step={(x1 - x0) / 400 || 1} value={x}
+            data-testid="stress-x" aria-label="Position x along the beam" onChange={(e) => setPick(Number(e.target.value))} />
+        </label>
+        <div className="text-sm" data-testid="stress-x-readout">
+          <span className="font-mono font-semibold">x = {formatNumber(span.fromSI(x), 3)} {span.unit}</span>
+          <span className="ml-3 text-muted">M = <span className="font-mono text-ink">{formatNumber(moment.fromSI(m))} {moment.unit}</span></span>
+          <button type="button" className="ml-3 text-xs text-primary-ink hover:underline" onClick={() => setPick(null)}>max moment</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div>
+          <p className="mb-1 text-center text-xs font-semibold text-muted">Cross-section</p>
+          <SectionDrawing chart={chart} length={fmtWith(small)} />
+        </div>
+        <div>
+          <p className="mb-1 text-center text-xs font-semibold text-muted">Bending stress σ at x</p>
+          <StressSection chart={chart} cTop={cTop} cBottom={cBottom} sigmaTop={s.top} sigmaBottom={s.bottom} stress={fmtStress} />
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-muted">
+        Strong-axis bending only; Z and L sections also bend about a tilted axis. Top fibre{" "}
+        <span className="font-mono text-ink" data-testid="stress-top-value">{fmtStress(s.top)}</span> ({s.top >= 0 ? "tension" : "compression"}), bottom fibre{" "}
+        <span className="font-mono text-ink" data-testid="stress-bottom-value">{fmtStress(s.bottom)}</span> ({s.bottom >= 0 ? "tension" : "compression"}).
+      </p>
+    </Card>
+  );
+}
+
+// ---------------- torsion tab ----------------
+
+function TorsionTab({ state, update, response, units, onEditSection }: {
+  state: StructuralState; update: Update; response: RunResponse | null; units: UnitSystem; onEditSection: () => void;
+}) {
+  const t = state.torsion;
+  const setT = (p: Partial<StructuralState["torsion"]>) => update((s) => ({ torsion: { ...s.torsion, ...p } }));
+  const span = unitConv("m", units);
+  const torque = unitConv("N·m", units);
+  const stress = stressConv(units);
+  const err = torsionError(t);
+  const sectionName = state.section.shape === "profile" ? String(state.section.profile) : state.section.shape.replace(/_/g, " ");
+  const small = smallLength(units);
+  const r = response?.ok ? fieldMap(response.result.fields) : null;
+  const num = (n: string) => (typeof r?.[n]?.value === "number" ? (r[n].value as number) : null);
+  const chart = response?.ok ? response.charts.find((c) => c.id === "section") : undefined;
+  const twist = response?.ok ? response.charts.find((c) => c.id === "twist") : undefined;
+  const share = num("saint_venant_share");
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <Card title="Cantilever under end torque" aside={
+          <button type="button" className="text-xs text-primary-ink hover:underline" onClick={onEditSection}>
+            Section: <span className="font-medium capitalize">{sectionName}</span> · {state.material} (edit)
+          </button>}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <NumberInput label="Length L" value={t.length} conv={span} positive testId="field-torsion-length" onChange={(v) => setT({ length: v ?? 0 })} />
+            <NumberInput label="Torque T" value={t.torque} conv={torque} testId="field-torque" onChange={(v) => setT({ torque: v ?? 0 })} />
+            <NumberInput label="Evaluate at x" value={t.position} conv={span} min={0} testId="field-position" onChange={(v) => setT({ position: v ?? 0 })} />
+          </div>
+          {err && <p className="mt-2 text-xs text-fail" data-testid="torsion-error">{err}</p>}
+          <p className="mt-4 text-xs text-muted">
+            Fixed at x = 0, torque applied at x = L. Open sections (I, channel, T, Z, L) use warping torsion; closed and solid sections use Saint-Venant torsion.
+          </p>
+        </Card>
+
+        <Card title="Section">
+          {chart ? <SectionDrawing chart={chart} length={fmtWith(small)} /> : <p className="text-sm text-muted">The section appears here once Python is ready.</p>}
+        </Card>
+      </div>
+
+      {response && !response.ok && <ErrorBox message={response.error.message} />}
+      {response?.ok && (
+        <div className="space-y-6" data-testid="results">
+          <Card title="Torsion results">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <Stat label="Twist at x" value={num("twist_deg") === null ? "—" : `${formatNumber(num("twist_deg")!)} °`} testId="result-twist_deg" />
+              <Stat label="Max shear stress τ" value={num("max_shear_stress") === null ? "—" : `${formatNumber(stress.fromSI(num("max_shear_stress")!))} ${stress.unit}`} testId="result-max_shear_stress" />
+              <Stat label="Warping parameter α" value={num("alpha") === null ? "—" : formatNumber(num("alpha")!)} testId="result-alpha" />
+              <Stat label="Saint-Venant share" value={share === null ? "—" : `${formatNumber(share * 100, 3)} %`} testId="result-saint_venant_share" />
+            </div>
+          </Card>
+          {twist && <div className="card p-3"><ChartView chart={twist} /></div>}
+        </div>
       )}
     </div>
   );
