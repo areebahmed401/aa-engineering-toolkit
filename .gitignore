@@ -29,3 +29,6 @@ web/playwright-report/
 # local reference documents (codes, standards, catalogues): never committed
 references/
 *.pdf
+
+# mkdocs build output
+site/

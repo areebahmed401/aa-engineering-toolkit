@@ -14,6 +14,10 @@ one set of standard catalogs: **Thermodynamics & Fluids, Structural, Electrical 
 **▶ Web app: <https://areebahmed401.github.io/aa-engineering-toolkit/>** (no install; Python runs
 locally in the browser via Pyodide, so nothing you enter leaves your device).
 
+**Docs: <https://areebahmed401.github.io/aa-engineering-toolkit/docs/>**
+
+[![Latest release](https://img.shields.io/github/v/release/areebahmed401/aa-engineering-toolkit)](https://github.com/areebahmed401/aa-engineering-toolkit/releases/latest)
+
 ## Web app
 
 `web/` is a React + TypeScript + Tailwind front end. Python runs in a Web Worker (Pyodide) and the
@@ -114,6 +118,11 @@ result.plot()                                # deflection / slope / shear / mome
   with `@register_tool(...)` and a reference, and add a `test_tool_<name>` test. The web app picks it up.
 - **A discipline:** copy `src/engtoolkit/_template/` and follow its instructions.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the docs how-tos
+([tool](https://areebahmed401.github.io/aa-engineering-toolkit/docs/how-to/add-a-tool/),
+[material](https://areebahmed401.github.io/aa-engineering-toolkit/docs/how-to/add-a-material/),
+[discipline](https://areebahmed401.github.io/aa-engineering-toolkit/docs/how-to/add-a-discipline/)).
+
 Dependency direction is enforced by `lint-imports`: `core` ← `materials`/`catalogs` ← `thermo` ←
 `electrical`, and `structural` ← `asme`.
 
@@ -127,6 +136,10 @@ ruff check src tests
 ```
 
 All of these run on GitHub Actions for every push.
+
+## Releases
+
+Versions follow SemVer; see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## License
 

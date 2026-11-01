@@ -70,6 +70,9 @@ export function Layout() {
           </div>
         );
       })}
+      <a href={`${import.meta.env.BASE_URL}docs/`} className="rounded-lg px-2 py-1.5 text-sm text-ink hover:bg-bg md:hidden">
+        Docs
+      </a>
     </nav>
   );
 
@@ -97,6 +100,9 @@ export function Layout() {
                 </Link>
               );
             })}
+            <a href={`${import.meta.env.BASE_URL}docs/`} className="rounded-lg px-3 py-1.5 text-sm text-white/70 transition hover:text-white">
+              Docs
+            </a>
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden sm:block">

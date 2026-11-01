@@ -1,0 +1,33 @@
+name: Feature or tool request
+description: Suggest a new tool, calculation or improvement.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: discipline
+    attributes:
+      label: Discipline
+      options:
+        - thermo
+        - structural
+        - electrical
+        - asme
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should it do and why is it useful?
+    validations:
+      required: true
+  - type: textarea
+    id: io
+    attributes:
+      label: Inputs and outputs
+      description: List the inputs (with units) and the results you expect.
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference or standard
+      description: Cite the source, clause or equation number. Do not paste copyrighted text or tables.
