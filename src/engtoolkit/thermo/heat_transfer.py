@@ -98,6 +98,18 @@ def forced_convection_cylinder(velocity: float, T_surface: float, T_ambient: flo
     return churchill_bernstein(Re, s.Pr) * s.k / D
 
 
+def forced_convection_flat_plate(velocity: float, T_surface: float, T_ambient: float, L: float,
+                                 fluid_name: str = AIR, P: float = 101325.0) -> float:
+    """
+    Average h [W/(m²·K)] for parallel flow over a flat plate of length L: laminar 0.664·Re^0.5·Pr^(1/3)
+    below Re = 5e5, mixed laminar/turbulent (0.037·Re^0.8 - 871)·Pr^(1/3) above (Incropera eq. 7.30, 7.38).
+    """
+    s = fluid(fluid_name).state(T=0.5 * (T_surface + T_ambient), P=P)
+    Re = s.rho * velocity * L / s.mu
+    Nu = 0.664 * Re**0.5 * s.Pr ** (1 / 3) if Re < 5e5 else (0.037 * Re**0.8 - 871) * s.Pr ** (1 / 3)
+    return Nu * s.k / L
+
+
 def h_radiation(emissivity: float, T_surface: float, T_surroundings: float) -> float:
     """Linearised radiation coefficient [W/(m²·K)] to large surroundings."""
     return emissivity * SIGMA * (T_surface + T_surroundings) * (T_surface**2 + T_surroundings**2)

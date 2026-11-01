@@ -16,6 +16,13 @@ materials:
     thermal: {k: 0.45, cp: 1900, alpha: 150e-6, emissivity: 0.9, max_service_T_C: 60}
     surface: {roughness: 7e-6}
 
+  - name: Thermal gap pad
+    family: polymer
+    aliases: [Gap pad, TIM pad]
+    source: Typical silicone gap filler pad for battery cold plates (3 W/(m·K) class, e.g. Bergquist Gap Pad TGP 3000 datasheet)
+    mechanical: {E: 1.0e6, nu: 0.45, rho: 3100}
+    thermal: {k: 3.0, cp: 1000, max_service_T_C: 200}
+
   - name: CFRP
     family: composite
     aliases: [Carbon fibre composite]

@@ -38,7 +38,7 @@ where = ["src"]
 include = ["engtoolkit*"]
 
 [tool.setuptools.package-data]
-engtoolkit = ["**/*.csv", "**/*.yaml", "**/*.mplstyle", "**/*.md", "**/*.txt"]
+engtoolkit = ["**/*.csv", "**/*.yaml", "**/*.json", "**/*.mplstyle", "**/*.md", "**/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

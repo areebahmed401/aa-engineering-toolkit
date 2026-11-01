@@ -2,6 +2,7 @@ import { HashRouter, Link, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { EngineProvider } from "./lib/engine";
 import { PrefsProvider } from "./lib/prefs";
+import { BatteryPage, BATTERY_TOOL } from "./pages/BatteryPage";
 import { Home } from "./pages/Home";
 import { ToolPage } from "./pages/ToolPage";
 
@@ -14,6 +15,7 @@ export default function App() {
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Home />} />
+              <Route path={`tool/${BATTERY_TOOL}`} element={<BatteryPage />} />
               <Route path="tool/:toolId" element={<ToolPage />} />
               <Route path="*" element={<div className="card p-6">Page not found. <Link className="text-primary underline" to="/">Home</Link></div>} />
             </Route>

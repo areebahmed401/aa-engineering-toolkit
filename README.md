@@ -39,10 +39,10 @@ which takes about a minute in the browser.
 | Package | Contents |
 |---|---|
 | `engtoolkit.materials` | Shared properties for every discipline: metals, polymers, composites, insulation (temperature-dependent curves, each with a source) and fluids via CoolProp (`fluid("Water")`, `fluid("IF97::Water")`, `fluid("INCOMP::MEG[0.3]")`) |
-| `engtoolkit.catalogs` | ASME B36.10/B36.19 pipe schedules 10/40/80, EN 10365 IPE profiles, Crane TP-410 fitting data, supplier costs |
+| `engtoolkit.catalogs` | ASME B36.10/B36.19 pipe schedules 10/40/80, EN 10365 IPE profiles, Crane TP-410 fitting data, supplier costs, battery cells (LG M50 NMC, A123 LFP, 60 Ah pouch) |
 | `engtoolkit.thermo` | Fluid properties, steam tables (IAPWS-95 / IF97), pipe pressure drop (Colebrook + Crane), heat transfer correlations, insulation sizing with natural convection + radiation, refrigeration/heat-pump cycle, psychrometrics, cooling towers, vacuum pumps |
 | `engtoolkit.structural` | Sections (rectangle, tubes, circle, I/H, C, T, Z, L, catalog profiles) with properties and outlines, determinacy check, equilibrium and 2D FEM (Euler-Bernoulli / Timoshenko), torsion and warping |
-| `engtoolkit.electrical` | Battery modelling — next phases (equivalent circuit, thermal, aging; PyBaMM optional) |
+| `engtoolkit.electrical` | Battery modelling: 1RC/2RC equivalent circuit with OCV-SOC and cut-offs (CC, CP, CC-CV, drive cycle), lumped thermal model with air or water-glycol cold-plate cooling, calendar/cycle aging (Wang 2011, Schmalstieg 2014), PyBaMM DFN/SPM with SEI and lithium plating (optional `[battery]` extra, precomputed for the browser) |
 | `engtoolkit.asme` | ASME VIII Div 1 vessel sizing — next phases |
 | `engtoolkit.core` | Units (SI inside, pint at the edges), result objects, the tool registry, plotting style |
 

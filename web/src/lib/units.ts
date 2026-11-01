@@ -42,6 +42,15 @@ const TABLE: Record<string, Record<UnitSystem, Conv>> = {
   rad: { SI: same("rad"), Imperial: same("rad") },
   deg: { SI: same("°"), Imperial: same("°") },
   USD: { SI: same("USD"), Imperial: same("USD") },
+  // electrical (battery)
+  A: { SI: same("A"), Imperial: same("A") },
+  V: { SI: same("V"), Imperial: same("V") },
+  Ah: { SI: same("A·h"), Imperial: same("A·h") },
+  Wh: { SI: same("W·h"), Imperial: same("W·h") },
+  ohm: { SI: lin("mΩ", 1e-3), Imperial: lin("mΩ", 1e-3) },
+  s: { SI: lin("min", 60), Imperial: lin("min", 60) },
+  J: { SI: lin("kJ", 1e3), Imperial: lin("Btu", 1055.05585) },
+  "W/cell": { SI: same("W/cell"), Imperial: same("W/cell") },
 };
 
 const TABLE_ALIASES: Record<string, string> = { "W/(m2·K)": "W/(m²·K)" };
