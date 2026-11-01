@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 
 from engtoolkit.materials._coolprop import CP
+from engtoolkit.materials.fluids import phase_name, state_label
 
 from engtoolkit.core.results import Result, rfield
 
@@ -23,6 +24,7 @@ class CycleState(Result):
     h: float = rfield("J/kg", "Enthalpy")
     s: float = rfield("J/(kg·K)", "Entropy")
     Q: float = rfield("", "Quality", default=math.nan)
+    state: str = rfield("", "State", default="")
 
 
 @dataclass
@@ -50,7 +52,11 @@ def _state(label: str, name: str, **inputs) -> CycleState:
         Q = Q if 0 <= Q <= 1 else math.nan
     except ValueError:
         Q = math.nan
-    return CycleState(label, get("T"), get("P"), get("H"), get("S"), Q)
+    try:
+        phase = phase_name(int(CP.PropsSI("Phase", k1, v1, k2, v2, name)))
+    except ValueError:
+        phase = ""
+    return CycleState(label, get("T"), get("P"), get("H"), get("S"), Q, state_label(phase, Q))
 
 
 def refrigeration_cycle(refrigerant: str, T_evap: float, T_cond: float, compressor_power: float,

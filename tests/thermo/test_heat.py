@@ -103,6 +103,16 @@ def test_refrigeration_cycle_energy_balance_and_efficiency():
     assert r.COP_cooling < 273.15 / 40  # below Carnot
 
 
+def test_refrigeration_cycle_state_labels():
+    r = refrigeration_cycle("R134a", 273.15, 313.15, 10e3)
+    labels = [st.state for st in r.states]
+    assert labels[:3] == ["Saturated vapour", "Superheated vapour", "Saturated liquid"]
+    assert labels[3].startswith("Saturated mixture (x = ")
+    r2 = refrigeration_cycle("R134a", 273.15, 313.15, 10e3, superheat=5, subcooling=5)
+    assert r2.states[0].state == "Superheated vapour"
+    assert r2.states[2].state == "Compressed (subcooled) liquid"
+
+
 def test_refrigeration_cycle_out_of_range_raises():
     with pytest.raises(ValueError):
         refrigeration_cycle("R134a", 273.15, 473.15, 10e3)  # above critical temperature

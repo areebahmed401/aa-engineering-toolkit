@@ -12,6 +12,7 @@ from typing import Iterable
 import numpy as np
 
 from engtoolkit.materials import FluidState, fluid
+from engtoolkit.materials.fluids import state_label
 
 
 def _water(formulation: str):
@@ -91,7 +92,7 @@ def superheated_table(P: float, T: Iterable[float], units: str = "engineering", 
     rows = []
     for t in T:
         s = w.state(T=float(t), P=P)
-        rows.append({"T": s.T, "P": s.P, "v": 1 / s.rho, "u": s.u, "h": s.h, "s": s.s, "phase": s.phase})
+        rows.append({"T": s.T, "P": s.P, "v": 1 / s.rho, "u": s.u, "h": s.h, "s": s.s, "phase": state_label(s.phase, s.Q)})
     return _to_frame(rows, units)
 
 

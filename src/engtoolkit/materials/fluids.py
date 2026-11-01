@@ -40,11 +40,35 @@ _PHASES = {
     CP.iphase_critical_point: "critical_point", CP.iphase_gas: "gas", CP.iphase_twophase: "twophase",
 }
 
+_STATE_LABELS = {
+    "liquid": "Compressed (subcooled) liquid", "gas": "Superheated vapour", "supercritical": "Supercritical fluid",
+    "supercritical_gas": "Gas (above critical temperature)",
+    "supercritical_liquid": "Compressed liquid (above critical pressure)",
+    "critical_point": "Critical point", "twophase": "Saturated mixture",
+}
+
+
+def phase_name(index: int) -> str:
+    """Toolkit phase code (e.g. 'gas', 'twophase') for a CoolProp phase index; '' if unknown."""
+    return _PHASES.get(index, "")
+
+
+def state_label(phase: str, Q: float = math.nan) -> str:
+    """Plain-words fluid state from a phase code and vapour quality (saturated liquid/vapour/mixture, ...)."""
+    if not math.isnan(Q) and 0.0 <= Q <= 1.0:
+        if abs(Q) <= 1e-9:
+            return "Saturated liquid"
+        if abs(Q - 1.0) <= 1e-9:
+            return "Saturated vapour"
+        return f"Saturated mixture (x = {Q:.3f})"
+    return _STATE_LABELS.get(phase, "")
+
 
 @dataclass
 class FluidState(Result):
     fluid: str = rfield("", "Fluid", default="")
-    phase: str = rfield("", "Phase", default="")
+    state: str = rfield("", "State", default="")
+    phase: str = rfield("", "Phase", default="", summary=False)
     T: float = rfield("K", "Temperature", default=math.nan)
     P: float = rfield("Pa", "Pressure", default=math.nan)
     rho: float = rfield("kg/m^3", "Density", default=math.nan)
@@ -138,10 +162,12 @@ class Fluid:
 
         Q = get(st.Q)
         phase = "liquid" if self.is_incompressible else _PHASES.get(get(st.phase), "")
+        Q = Q if 0.0 <= Q <= 1.0 else math.nan
         return FluidState(
-            fluid=self.name, phase=phase, T=st.T(), P=st.p(), rho=st.rhomass(), h=st.hmass(), s=st.smass(),
+            fluid=self.name, state="Liquid" if self.is_incompressible else state_label(phase, Q),
+            phase=phase, T=st.T(), P=st.p(), rho=st.rhomass(), h=st.hmass(), s=st.smass(),
             u=get(st.umass), cp=get(st.cpmass), cv=get(st.cvmass), mu=get(st.viscosity), k=get(st.conductivity),
-            Pr=get(st.Prandtl), Q=Q if 0.0 <= Q <= 1.0 else math.nan,
+            Pr=get(st.Prandtl), Q=Q,
         )
 
     def saturation(self, T: float | None = None, P: float | None = None) -> tuple[FluidState, FluidState]:
@@ -207,7 +233,7 @@ class TabulatedAir:
             raise ValueError(f"Tabulated air covers {self._T[0]:.0f}-{self._T[-1]:.0f} K, got {T:.1f} K")
         mu, k, cp = (float(np.interp(T, self._T, arr)) for arr in (self._mu, self._k, self._cp))
         rho = P / (self.R * T)
-        return FluidState(fluid=self.name, phase="gas", T=T, P=P, rho=rho, cp=cp, cv=cp - self.R, mu=mu, k=k,
+        return FluidState(fluid=self.name, state="Gas", phase="gas", T=T, P=P, rho=rho, cp=cp, cv=cp - self.R, mu=mu, k=k,
                           Pr=mu * cp / k, h=cp * (T - 273.15), u=(cp - self.R) * (T - 273.15))
 
     def prop(self, output: str, **inputs) -> float:
