@@ -50,7 +50,8 @@ class SectionProperties(Result):
     CoG_z: float = rfield("m", "Centroid from left edge")
     CoS_y: float = rfield("m", "Shear centre height from bottom")
     CoS_z: float = rfield("m", "Shear centre from left edge")
-    mass_per_m: float = rfield("kg/m", "Mass per metre (steel)")
+    mass_per_m: float = rfield("kg/m", "Mass per metre")
+    designation: str = rfield("", "Section", default="")
 
 
 # =========================================================
@@ -58,6 +59,12 @@ class SectionProperties(Result):
 # =========================================================
 
 class CrossSection(ABC):
+    designation: str = ""  # catalog name (e.g. "IPE 200") when built from a profile
+
+    @property
+    def name(self) -> str:
+        """Catalog designation if any, otherwise the class name."""
+        return self.designation or type(self).__name__
 
     @property
     @abstractmethod
@@ -153,7 +160,7 @@ class CrossSection(ABC):
             shape=type(self).__name__, area=self.area, Iyy=self.Iyy, Izz=self.Izz, Iyz=self.Iyz, Ip=self.Ip,
             W_el_y=self.W_el_y, r_y=self.Rg, J_torsion=self.J_torsion, W_torsion=self.W_torsion,
             C_warping=self.C_torsion, height=self.height, width=self.width, CoG_y=self.CoG_y, CoG_z=self.CoG_z,
-            CoS_y=self.CoS_y, CoS_z=self.CoS_z, mass_per_m=self.area * rho,
+            CoS_y=self.CoS_y, CoS_z=self.CoS_z, mass_per_m=self.area * rho, designation=self.name,
         )
 
 
