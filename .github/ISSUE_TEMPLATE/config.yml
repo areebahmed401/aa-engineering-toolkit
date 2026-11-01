@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://areebahmed401.github.io/aa-engineering-toolkit/docs/
+    about: Read the docs and how-to guides before opening an issue.

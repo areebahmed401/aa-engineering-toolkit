@@ -12,7 +12,7 @@ Sub-packages (import only what you need):
 
 Run any registered tool:  ``engtoolkit.run("thermo.pipe_pressure_drop", length=100)``
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from engtoolkit.core.registry import get_tool, list_tools, run  # noqa: E402
 

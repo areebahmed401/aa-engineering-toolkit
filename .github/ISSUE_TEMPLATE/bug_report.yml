@@ -1,0 +1,38 @@
+name: Bug report
+description: Something gives a wrong result, an error, or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - Web app
+        - Python package
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or page
+      description: Tool id (for example thermo.insulation_thickness) or page name.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the inputs you used, or paste the web app link (inputs are encoded in the URL).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual result
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and environment
+      description: Toolkit version, browser or Python version, operating system.
