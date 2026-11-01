@@ -137,7 +137,8 @@ def build_beam(inp: BeamAnalysisInputs) -> Beam:
 @register_tool("structural.beam_analysis", "Beam analysis", BeamAnalysisInputs,
                description="Determinacy check, then equilibrium or 2D FEM: reactions, deflection, shear, moment and stress.",
                reference="Closed-form beam tables (Roark; Gere & Goodno): PL³/3EI, 5wL⁴/384EI, wL²/8, wL²/12",
-               tags=("beam", "FEM", "bending"), custom_page=True, charts=_charts.beam_charts)
+               tags=("beam", "FEM", "bending"), custom_page=True,
+               charts=lambda inp, res: _charts.beam_charts(inp, res, build_section(inp.section)))
 def beam_analysis_tool(inp: BeamAnalysisInputs) -> BeamAnalysisResult:
     return analyze_beam(build_beam(inp), theory=inp.theory, n_elem=inp.n_elem)
 
@@ -165,7 +166,7 @@ class TorsionInputs(BaseModel):
 @register_tool("structural.torsion", "Torsion and warping (cantilever)", TorsionInputs,
                description="Twist of a cantilever under end torque: warping torsion for open sections, Saint-Venant otherwise.",
                reference="Vlasov warping torsion closed form θ(L) = TL/GJ·(1 − tanh α/α); Saint-Venant θ = TL/GJ",
-               tags=("torsion", "warping"),
+               tags=("torsion", "warping"), custom_page=True,
                charts=lambda inp, res: _charts.torsion_charts(
                    Beam(inp.material, inp.length, build_section(inp.section)), inp.torque, res))
 def torsion_tool(inp: TorsionInputs) -> TorsionResult:

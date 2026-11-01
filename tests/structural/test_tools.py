@@ -95,3 +95,49 @@ def test_beam_propped_cantilever_peaks():
     assert r.max_bending_stress == pytest.approx(r.max_moment * 0.1 / (0.1 * 0.2**3 / 12))
     assert r.utilisation == pytest.approx(r.max_bending_stress / r.yield_strength)
     assert r.section == "Rectangle"
+
+
+def _beam(shape, left, right, loads, L=2.0, **sec):
+    return run("structural.beam_analysis", {
+        "section": {"shape": shape, "width": 0.1, "height": 0.2, **sec},
+        "length": L, "left_support": left, "right_support": right, "loads": loads,
+    })
+
+
+def test_beam_bending_stress_simply_supported():
+    P, L, b, h = 10e3, 2.0, 0.1, 0.2
+    r = _beam("rectangle", "pinned", "roller", [{"kind": "point", "value": P, "x": L / 2}], L=L)
+    I = b * h**3 / 12
+    expected = P * L / 4 * (h / 2) / I
+    assert max(r.sigma_bottom) == pytest.approx(expected, rel=1e-3)
+    assert min(r.sigma_top) == pytest.approx(-expected, rel=1e-3)
+    peak = max(max(abs(s) for s in r.sigma_top), max(abs(s) for s in r.sigma_bottom))
+    assert peak == pytest.approx(r.max_bending_stress)
+    assert r.c_top == pytest.approx(h / 2) and r.c_bottom == pytest.approx(h / 2)
+    assert len(r.sigma_top) == len(r.x_internal)
+
+
+def test_beam_bending_stress_cantilever_signs():
+    r = _beam("rectangle", "fixed", "free", [{"kind": "point", "value": 10e3, "x": 2.0}])
+    assert r.sigma_top[0] > 0 and r.sigma_bottom[0] < 0
+
+
+def test_beam_bending_stress_t_section_ratio():
+    r = _beam("t_beam", "fixed", "free", [{"kind": "point", "value": 10e3, "x": 2.0}],
+              thickness=0.02, web_thickness=0.01)
+    assert r.c_top != pytest.approx(r.c_bottom)
+    for st, sb in zip(r.sigma_top, r.sigma_bottom):
+        if abs(sb) > 1e-6:
+            assert st / sb == pytest.approx(-r.c_top / r.c_bottom)
+
+
+def test_tool_chart_ids():
+    from engtoolkit.core.registry import get_tool
+    beam = get_tool("structural.beam_analysis")
+    inp = beam.parse({})
+    ids = [c.id for c in beam.make_charts(inp, beam.func(inp))]
+    assert "section" in ids and "bending_stress" in ids
+    tors = get_tool("structural.torsion")
+    inp = tors.parse({})
+    assert "section" in [c.id for c in tors.make_charts(inp, tors.func(inp))]
+    assert tors.schema()["custom_page"] is True
