@@ -62,3 +62,28 @@ test("shared link reproduces inputs and validation errors show on the field", as
   await page.getByTestId("calculate").click();
   await expect(page.getByTestId("run-error")).toBeVisible();
 });
+
+test("vessel builder walks the steps, flags a failing design and downloads a report", async () => {
+  await page.goto("./#/tool/asme.vessel_design");
+  await expect(page.getByRole("heading", { level: 1, name: "Pressure vessel builder (VIII-1)" })).toBeVisible();
+  await expect(page.getByTestId("vessel-disclaimer")).toContainText("Preliminary sizing only");
+
+  // step through to the shell and force a too-thin plate
+  await page.getByTestId("step-shell").click();
+  await page.getByLabel(/Nominal thickness/).fill("0.006");
+  await page.getByTestId("step-conditions").click();
+  await page.getByLabel(/External design pressure/).fill("101.325");
+  await page.getByTestId("calculate").click();
+  await expect(page.getByTestId("vessel-status").first()).toHaveAttribute("data-status", "FAIL", { timeout: 45_000 });
+  await expect(page.getByTestId("vessel-checks")).toContainText("UG-28(c)");
+  await expect(page.locator('[data-testid^="chart-"] .main-svg').first()).toBeVisible();
+
+  // blank thickness picks the next standard plate and the design passes again
+  await page.getByTestId("step-shell").click();
+  await page.getByLabel(/Nominal thickness/).fill("");
+  await page.getByTestId("calculate").click();
+  await expect(page.getByTestId("vessel-status").first()).toHaveAttribute("data-status", "PASS", { timeout: 45_000 });
+
+  const [report] = await Promise.all([page.waitForEvent("download"), page.getByTestId("vessel-report").click()]);
+  expect(report.suggestedFilename()).toBe("pressure_vessel.md");
+});
