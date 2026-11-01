@@ -15,7 +15,7 @@ def beam_results_plot(x, v, theta, x_internal, V, M):
         fig, axs = new_figure(4, 1, figsize=(11, 10), sharex=True)
         axs[0].plot(x, np.asarray(v) * 1000, color="#E0A800")
         axs[0].set(ylabel="Deflection [mm]", title="Deflection")
-        axs[1].plot(x, theta, color="#2B2D31")
+        axs[1].plot(x, theta, color="#2A9D8F")
         axs[1].set(ylabel="Slope θ [rad]", title="Slope")
         axs[2].plot(x_internal, V, color="#3D7EA6")
         axs[2].fill_between(x_internal, V, alpha=0.15, color="#3D7EA6")

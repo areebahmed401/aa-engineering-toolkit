@@ -6,10 +6,11 @@ export const WORDMARK_SUB = "#9A9DA4";
 
 const CHART_BASE = ["#E0A800", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"];
 
-/** Plotly colorway: gold first, then ink (theme dependent), then the discipline colours. */
+/** Plotly colorway: gold first, then teal, then the discipline colours (same in both themes). */
 export function chartColorway(theme: "light" | "dark"): string[] {
-  const ink = theme === "dark" ? "#ECECEE" : "#2B2D31";
-  return [CHART_BASE[0], ink, ...CHART_BASE.slice(1)];
+  // teal reads on both the white and the dark chart background (a dark grey vanished in dark mode)
+  void theme;
+  return [CHART_BASE[0], "#2A9D8F", ...CHART_BASE.slice(1)];
 }
 
 export const CHART_SHAPE_LINE = "#E0A800";
