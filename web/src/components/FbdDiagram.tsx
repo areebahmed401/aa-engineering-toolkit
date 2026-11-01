@@ -106,7 +106,7 @@ export function FbdDiagram({ beam, fmt, reactions }: { beam: BeamValues; fmt: Fb
 
       {f.supports.map((s) => <Support key={s.side} kind={s.kind} x={s.x} y={y} side={s.side} />)}
 
-      {f.points.map((a, i) => <g key={`p${i}`} data-testid="fbd-point"><Arrow a={a} className="text-primary" /></g>)}
+      {f.points.map((a, i) => <g key={`p${i}`} data-testid="fbd-point"><Arrow a={a} className="text-primary-ink" /></g>)}
       {f.moments.map((m, i) => <g key={`m${i}`} data-testid="fbd-moment"><Moment m={m} y={y} className="text-thermo" /></g>)}
 
       {f.reactions.map((a, i) => <g key={`r${i}`} data-testid="fbd-reaction"><Arrow a={a} className="text-ok" /></g>)}

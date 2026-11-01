@@ -1,29 +1,31 @@
 {
   "name": "AA Engineering Toolkit",
   "brand": {
-    "primary": "#4F46E5",
-    "accent": "#06B6D4",
-    "gradient": ["#4F46E5", "#06B6D4"]
+    "primary": "#E0A800",
+    "primary_text": "#9A7400",
+    "accent": "#111214",
+    "header": "#111214",
+    "gradient": ["#F2B705", "#C99400"]
   },
   "disciplines": {
-    "thermo": "#F97316",
-    "structural": "#0EA5E9",
-    "electrical": "#22C55E",
-    "asme": "#A855F7"
+    "thermo": "#C8632B",
+    "structural": "#3D7EA6",
+    "electrical": "#3E9A5C",
+    "asme": "#7A64A8"
   },
   "light": {
-    "background": "#F8FAFC",
+    "background": "#E6E7EA",
     "surface": "#FFFFFF",
-    "border": "#E2E8F0",
-    "text": "#0F172A",
-    "muted": "#64748B"
+    "border": "#CFD1D6",
+    "text": "#111214",
+    "muted": "#5E6168"
   },
   "dark": {
-    "background": "#0B1120",
-    "surface": "#111827",
-    "border": "#1F2937",
-    "text": "#E2E8F0",
-    "muted": "#94A3B8"
+    "background": "#1B1C1F",
+    "surface": "#26272B",
+    "border": "#3A3B40",
+    "text": "#ECECEE",
+    "muted": "#9A9DA4"
   },
   "status": {
     "ok": "#16A34A",
@@ -35,5 +37,5 @@
     "numeric": "JetBrains Mono"
   },
   "radius": "0.75rem",
-  "chart_colors": ["#4F46E5", "#06B6D4", "#F97316", "#22C55E", "#A855F7", "#EC4899", "#0EA5E9", "#EAB308"]
+  "chart_colors": ["#E0A800", "#2B2D31", "#3D7EA6", "#C8632B", "#3E9A5C", "#7A64A8", "#8A8D93", "#9A7400"]
 }

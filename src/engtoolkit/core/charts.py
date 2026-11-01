@@ -71,8 +71,8 @@ class Chart:
             ax2 = ax.twinx() if any(s.axis == "y2" for s in self.series) else None
             from matplotlib.patches import Polygon
             for shape in self.shapes:
-                ax.add_patch(Polygon(shape.points, closed=True, facecolor="white" if shape.hole else "#C7D2FE",
-                                     edgecolor="#4F46E5", lw=1.5))
+                ax.add_patch(Polygon(shape.points, closed=True, facecolor="white" if shape.hole else "#FCEBB0",
+                                     edgecolor="#9A7400", lw=1.5))
             for s in self.series:
                 target = ax2 if s.axis == "y2" else ax
                 style = {"lines": "-", "markers": "o", "lines+markers": "o-"}[s.mode]

@@ -86,7 +86,7 @@ export function VesselDesign() {
     return (
       <div className="card p-6">
         <p className="mb-2 font-semibold">Vessel builder not found in this build</p>
-        <Link className="text-primary underline" to="/">Back to all tools</Link>
+        <Link className="text-primary-ink underline" to="/">Back to all tools</Link>
       </div>
     );
   }
@@ -157,7 +157,7 @@ export function VesselDesign() {
               aria-current={i === step ? "step" : undefined}
               className={cn(
                 "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition",
-                i === step ? "bg-primary text-white" : "text-muted hover:bg-bg hover:text-ink",
+                i === step ? "bg-primary text-on-primary" : "text-muted hover:bg-bg hover:text-ink",
               )}
             >
               <span className={cn("flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",

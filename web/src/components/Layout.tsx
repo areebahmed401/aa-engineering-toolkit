@@ -9,6 +9,8 @@ import { cn, SECTION_META } from "./ui";
 
 const REPO = "https://github.com/areebahmed401/aa-engineering-toolkit";
 
+const HEADER_BTN = "btn border border-white/15 p-2 text-white hover:bg-white/10";
+
 export function Layout() {
   const { schema } = useEngine();
   const { units, setUnits, theme, toggleTheme } = usePrefs();
@@ -55,7 +57,7 @@ export function Layout() {
                       className={({ isActive }) =>
                         cn(
                           "block rounded-lg px-2 py-1.5 text-sm transition",
-                          isActive ? "bg-primary/10 font-medium text-primary" : "text-ink hover:bg-bg",
+                          isActive ? "border-l-2 border-primary bg-primary/15 font-medium text-ink" : "border-l-2 border-transparent text-ink hover:bg-bg",
                         )
                       }
                     >
@@ -73,9 +75,9 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-black/40 bg-header text-white">
         <div className="flex h-14 items-center gap-3 px-4">
-          <button className="btn-ghost p-2 lg:hidden" onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle menu">
+          <button className={HEADER_BTN + " lg:hidden"} onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle menu">
             {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
           <Link to="/" className="shrink-0">
@@ -89,7 +91,7 @@ export function Layout() {
                 <Link
                   key={id}
                   to={first ? `/tool/${first.id}` : `/#${id}`}
-                  className={cn("rounded-lg px-3 py-1.5 text-sm transition", active ? "bg-bg font-medium" : "text-muted hover:text-ink")}
+                  className={cn("rounded-lg px-3 py-1.5 text-sm transition", active ? "bg-white/10 text-white" : "text-white/70 hover:text-white")}
                 >
                   {name.split(" ")[0]}
                 </Link>
@@ -100,11 +102,11 @@ export function Layout() {
             <div className="hidden sm:block">
               <EngineStatus compact />
             </div>
-            <div className="flex rounded-lg border border-border p-0.5 text-xs" role="group" aria-label="Unit system">
+            <div className="flex rounded-lg border border-white/15 p-0.5 text-xs" role="group" aria-label="Unit system">
               {(["SI", "Imperial"] as const).map((u) => (
                 <button
                   key={u}
-                  className={cn("rounded-md px-2 py-1 transition", units === u ? "bg-primary text-white" : "text-muted hover:text-ink")}
+                  className={cn("rounded-md px-2 py-1 transition", units === u ? "bg-primary text-on-primary" : "text-white/70 hover:text-white")}
                   onClick={() => setUnits(u)}
                   aria-pressed={units === u}
                 >
@@ -112,10 +114,10 @@ export function Layout() {
                 </button>
               ))}
             </div>
-            <button className="btn-ghost p-2" onClick={toggleTheme} aria-label="Toggle dark mode">
+            <button className={HEADER_BTN} onClick={toggleTheme} aria-label="Toggle dark mode">
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <a className="btn-ghost hidden p-2 sm:inline-flex" href={REPO} target="_blank" rel="noreferrer" aria-label="Source on GitHub">
+            <a className={HEADER_BTN + " hidden sm:inline-flex"} href={REPO} target="_blank" rel="noreferrer" aria-label="Source on GitHub">
               <Github className="h-4 w-4" />
             </a>
           </div>

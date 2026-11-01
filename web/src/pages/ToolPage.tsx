@@ -71,7 +71,7 @@ function GenericToolPage({ toolId }: { toolId: string }) {
     return (
       <div className="card p-6">
         <p className="mb-2 font-semibold">Tool not found</p>
-        <Link className="text-primary underline" to="/">Back to all tools</Link>
+        <Link className="text-primary-ink underline" to="/">Back to all tools</Link>
       </div>
     );
   }

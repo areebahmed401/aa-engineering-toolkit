@@ -13,15 +13,15 @@ def beam_results_plot(x, v, theta, x_internal, V, M):
 
     with styled():
         fig, axs = new_figure(4, 1, figsize=(11, 10), sharex=True)
-        axs[0].plot(x, np.asarray(v) * 1000, color="#4F46E5")
+        axs[0].plot(x, np.asarray(v) * 1000, color="#E0A800")
         axs[0].set(ylabel="Deflection [mm]", title="Deflection")
-        axs[1].plot(x, theta, color="#06B6D4")
+        axs[1].plot(x, theta, color="#2B2D31")
         axs[1].set(ylabel="Slope θ [rad]", title="Slope")
-        axs[2].plot(x_internal, V, color="#0EA5E9")
-        axs[2].fill_between(x_internal, V, alpha=0.15, color="#0EA5E9")
+        axs[2].plot(x_internal, V, color="#3D7EA6")
+        axs[2].fill_between(x_internal, V, alpha=0.15, color="#3D7EA6")
         axs[2].set(ylabel="Shear [N]", title="Shear force")
-        axs[3].plot(x_internal, M, color="#F97316")
-        axs[3].fill_between(x_internal, M, alpha=0.15, color="#F97316")
+        axs[3].plot(x_internal, M, color="#C8632B")
+        axs[3].fill_between(x_internal, M, alpha=0.15, color="#C8632B")
         axs[3].set(ylabel="Moment [N·m]", xlabel="x [m]", title="Bending moment (sagging +)")
         for ax in axs:
             ax.axhline(0, color="#94A3B8", lw=0.8)
@@ -48,8 +48,8 @@ def plot_fbd(beam, scale_force=None, scale_moment=None, scale_udl=None):
     for load in point:
         h = load.P * force_scale
         ax.annotate("", xy=(load.x, 0), xytext=(load.x, h),
-                    arrowprops=dict(arrowstyle="-|>", color="#4F46E5", lw=2))
-        ax.text(load.x, h * 1.08, f"{load.P / 1e3:.2f} kN", ha="center", va="bottom", color="#4F46E5", fontsize=9)
+                    arrowprops=dict(arrowstyle="-|>", color="#E0A800", lw=2))
+        ax.text(load.x, h * 1.08, f"{load.P / 1e3:.2f} kN", ha="center", va="bottom", color="#E0A800", fontsize=9)
     for load in udls:
         x2 = load.x2 if load.x2 is not None else L
         h = load.w * udl_scale
@@ -91,11 +91,11 @@ def section_plot(section, title: str | None = None):
     shape = section.outline()
     with styled():
         fig, ax = new_figure(figsize=(4.5, 4.5))
-        ax.add_patch(patches.Polygon(shape["outer"], closed=True, facecolor="#C7D2FE", edgecolor="#4F46E5", lw=1.5))
+        ax.add_patch(patches.Polygon(shape["outer"], closed=True, facecolor="#FCEBB0", edgecolor="#9A7400", lw=1.5))
         for hole in shape["holes"]:
-            ax.add_patch(patches.Polygon(hole, closed=True, facecolor="white", edgecolor="#4F46E5", lw=1.5))
+            ax.add_patch(patches.Polygon(hole, closed=True, facecolor="white", edgecolor="#9A7400", lw=1.5))
         ax.plot(section.CoG_z, section.CoG_y, "o", color="#0F172A", label="Centroid")
-        ax.plot(section.CoS_z, section.CoS_y, "x", color="#F97316", ms=9, mew=2, label="Shear centre")
+        ax.plot(section.CoS_z, section.CoS_y, "x", color="#C8632B", ms=9, mew=2, label="Shear centre")
         pad = 0.15 * max(section.width, section.height)
         z_min = min(0.0, section.CoS_z) - pad
         ax.set_xlim(z_min, section.width + pad)
