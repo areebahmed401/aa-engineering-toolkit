@@ -12,9 +12,16 @@ import { download, markdownReport } from "../lib/report";
 import { defaultValues, fieldsFromSchema } from "../lib/schema";
 import type { RunResponse } from "../lib/types";
 import { decodeInputs, encodeInputs } from "../lib/urlState";
+import { STRUCTURAL_PAGE_TOOLS, StructuralRoute } from "./StructuralPage";
 
 export function ToolPage() {
   const { toolId = "" } = useParams();
+  // tools with a dedicated page open it instead of the generic form
+  if (STRUCTURAL_PAGE_TOOLS.has(toolId)) return <StructuralRoute />;
+  return <GenericToolPage toolId={toolId} />;
+}
+
+function GenericToolPage({ toolId }: { toolId: string }) {
   const [params, setParams] = useSearchParams();
   const { schema, progress, run } = useEngine();
   const { units } = usePrefs();

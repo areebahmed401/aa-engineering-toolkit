@@ -18,6 +18,11 @@ input forms, result cards and interactive Plotly charts are generated from the t
 new registered tool appears in the app without front-end code. Inputs are encoded in the URL, so a
 link reproduces a calculation, and results download as a Markdown report or CSV.
 
+The **structural page** (`#/structural`) is hand-built on top of the same tools: a section designer
+(shape picker showing only that shape's dimensions, live drawing with centroid and shear centre)
+and a beam builder with an interactive free-body diagram, the determinacy verdict (equilibrium,
+FEM, or mechanism), reactions, peak values with their positions, utilisation and the four diagrams.
+
 ```bash
 python scripts/build_web_assets.py   # wheel + tool schema + dropdown choices -> web/public/py
 cd web

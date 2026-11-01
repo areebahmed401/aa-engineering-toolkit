@@ -11,6 +11,8 @@ const schema = JSON.parse(
 const HEOS_TOOLS = new Set(["thermo.refrigeration_cycle"]);
 // Tools that register charts but return none for their defaults
 const NO_CHARTS = new Set(["thermo.cooling_tower"]);
+// Tools whose dedicated page draws their chart as SVG instead of Plotly
+const SVG_CHARTS: Record<string, string> = { "structural.section_properties": '[data-testid="section-drawing"]' };
 
 test.describe.configure({ mode: "serial" });
 
@@ -40,7 +42,9 @@ for (const tool of schema.tools) {
     await page.getByTestId("calculate").click();
     await expect(page.getByTestId("results")).toBeVisible({ timeout: HEOS_TOOLS.has(tool.id) ? 200_000 : 45_000 });
     await expect(page.getByTestId("run-error")).toHaveCount(0);
-    if (tool.has_charts && !NO_CHARTS.has(tool.id)) {
+    if (SVG_CHARTS[tool.id]) {
+      await expect(page.locator(SVG_CHARTS[tool.id])).toBeVisible();
+    } else if (tool.has_charts && !NO_CHARTS.has(tool.id)) {
       await expect(page.locator('[data-testid^="chart-"] .main-svg').first()).toBeVisible();
     }
   });
