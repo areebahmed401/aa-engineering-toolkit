@@ -20,6 +20,7 @@ export const NAV: Record<string, GroupConfig[]> = {
         structural("section", "1 · Section", "structural.section_properties"),
         structural("beam", "2 · Beam", "structural.beam_analysis"),
         structural("torsion", "3 · Torsion", "structural.torsion"),
+        structural("poles", "4 · Pole plan", "structural.pole_plan"),
       ],
     },
   ],
