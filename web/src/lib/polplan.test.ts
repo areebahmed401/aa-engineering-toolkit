@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMember, addNode, clipLine, clusterOffsets, contradictionPoint, displacedSegments, displacementFactor, emptyHistory, EMPTY_MODEL,
-  fitView, hitTest, moveNode, nodeAt, nodeById, normalizeModel, panBy, parsePoleResult, pickNode, placeInfinityPoles, POLE_PRESETS, poleReportExtra,
+  addMember, addNode, bestLabelSpot, clipLine, clusterOffsets, contradictionPoint, displacedSegments, displacementFactor, emptyHistory, EMPTY_MODEL,
+  fitView, hitTest, labelClearance, moveNode, nodeAt, nodeById, normalizeModel, panBy, parsePoleResult, pickNode, placeInfinityPoles, POLE_PRESETS, poleReportExtra,
   poleText, rayToEdge, record, redo, removeMember, removeNode, removeSupport, rotateSupport, setSupport, setSupportAngle, snap, snapPoint,
   splitMember, supportSide, toggleJoint, toModel, toolInputs, toScreen, undo, zoomAt, type PoleModel, type PoleResult, type View,
 } from "./polplan";
@@ -336,5 +336,18 @@ describe("tool result", () => {
     expect(md).toContain("| (1,2) | ∞ ↕ (0, 1) | displacement |");
     expect(md).toContain("1. a");
     expect(md).toContain("- Pole (1): no pole");
+  });
+});
+
+describe("label placement", () => {
+  it("treats placed labels as boxes, not points", () => {
+    // a label box 20 wide centred at (50, 50): its edge is 10 from the centre
+    expect(labelClearance([80, 50], 10, 5, [[50, 50, 10, 5]])).toBe(10);
+    expect(labelClearance([60, 50], 10, 5, [[50, 50, 10, 5]])).toBe(0);
+    expect(labelClearance([80, 50], 10, 5, [[50, 50]])).toBe(20);
+  });
+  it("picks the spot that does not overlap a placed label", () => {
+    const at = bestLabelSpot([[50, 50], [50, 90]], 20, 7, [[50, 50, 20, 7]], { w: 200, h: 200 });
+    expect(at).toEqual([50, 90]);
   });
 });
