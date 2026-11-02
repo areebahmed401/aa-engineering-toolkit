@@ -100,7 +100,7 @@ def refrigeration_cycle(refrigerant: str, T_evap: float, T_cond: float, compress
     )
 
 
-def cycle_path(refrigerant: str, states: list[CycleState], n: int = 30) -> dict[str, list[float]]:
+def cycle_path(refrigerant: str, states: list[CycleState], n: int = 12) -> dict[str, list[float]]:
     """
     The cycle's processes traced through real states (for plotting), not straight lines between points:
     1→2 compression (log P linear in h), 2→3 condenser and 4→1 evaporator at constant pressure (so
@@ -108,6 +108,9 @@ def cycle_path(refrigerant: str, states: list[CycleState], n: int = 30) -> dict[
     Returns lists h, P, s, T [SI] in order, closed back to state 1.
     """
     import numpy as np
+
+    from engtoolkit.materials import fluid
+    f = fluid(refrigerant)  # one reused AbstractState: far cheaper than PropsSI per point in the browser
     s1, s2, s3, s4 = states
     legs = [
         (np.linspace(s1.h, s2.h, n), np.geomspace(s1.P, s2.P, n)),       # compression
@@ -119,8 +122,7 @@ def cycle_path(refrigerant: str, states: list[CycleState], n: int = 30) -> dict[
     for hs, Ps in legs:
         for h, P in zip(hs[:-1], Ps[:-1]):  # each leg's end is the next leg's start
             try:
-                T = CP.PropsSI("T", "P", P, "H", h, refrigerant)
-                s = CP.PropsSI("S", "P", P, "H", h, refrigerant)
+                T, s = f.props(("T", "s"), P=float(P), H=float(h))
             except ValueError:
                 continue
             out["h"].append(float(h))
