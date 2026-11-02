@@ -11,6 +11,7 @@ const tools = [
   tool("thermo.fluid_properties", "Fluid properties", "", ["coolprop"]),
   tool("thermo.new_thing", "New thing"),
   tool("structural.torsion", "Torsion", "Warping of thin-walled sections"),
+  tool("structural.pole_plan", "Pole plan (kinematic movability)", "Counting criterion and pole plan"),
   tool("structural.beam_analysis", "Beam analysis", "Deflection and moment"),
   tool("structural.section_properties", "Section properties", "Area and inertia"),
 ];
@@ -35,6 +36,7 @@ describe("buildNav", () => {
       ["1 · Section", "/structural?tab=section"],
       ["2 · Beam", "/structural?tab=beam"],
       ["3 · Torsion", "/structural?tab=torsion"],
+      ["4 · Pole plan", "/structural?tab=poles"],
     ]);
   });
 

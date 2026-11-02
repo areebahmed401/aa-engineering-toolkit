@@ -13,7 +13,9 @@ from engtoolkit.materials import get_material
 
 from . import charts as _charts
 from .analysis import BeamAnalysisResult, analyze_beam
+from .kinematics import PolePlanInputs
 from .loads import DistributedLoad, MomentLoad, PointLoad, support
+from .polplan import PolePlanResult, analyze_pole_plan
 from .sections import (
     Beam, CBeam, Circle, CrossSection, HollowCircle, IBeam, LBeam, Rectangle, RectangularTube, SectionProperties,
     TBeam, ZBeam,
@@ -179,3 +181,14 @@ def torsion_tool(inp: TorsionInputs) -> TorsionResult:
         theta = t.theta()
         return TorsionResult(theta, math.degrees(theta), sv, tau, t.alpha, t.saint_venant_share(0.0))
     return TorsionResult(sv, math.degrees(sv), sv, tau, math.nan, 1.0)
+
+
+# ---------------- pole plan (kinematic movability) ----------------
+
+@register_tool("structural.pole_plan", "Pole plan (kinematic movability)", PolePlanInputs,
+               description="Counting criterion and pole plan (Polplan) of a planar system of rigid bodies, "
+                           "checked against an exact small-displacement analysis.",
+               reference="Pole rules of rigid-body kinematics (main-pole and relative-pole theorems); counting criterion U = (A + z) - 3k",
+               tags=("kinematics", "pole plan", "mechanism", "stability"), custom_page=True)
+def pole_plan_tool(inp: PolePlanInputs) -> PolePlanResult:
+    return analyze_pole_plan(inp)
