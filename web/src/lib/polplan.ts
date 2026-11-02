@@ -613,24 +613,31 @@ export function poleReportExtra(r: PoleResult): string {
 
 // ---------------- label placement ----------------
 
-/** Distance from the nearest obstacle point to the label box (centre c, half sizes); 0 when one lies inside. */
-export function labelClearance(c: Pt, halfW: number, halfH: number, obstacles: Pt[]): number {
+/** A point [x, y] or a box [cx, cy, halfW, halfH] (an already placed label). */
+export type Obstacle = Pt | [number, number, number, number];
+
+/** Distance from the nearest obstacle to the label box (centre c, half sizes); 0 when they overlap. */
+export function labelClearance(c: Pt, halfW: number, halfH: number, obstacles: Obstacle[]): number {
   let m = Infinity;
   for (const o of obstacles) {
-    const dx = Math.max(Math.abs(o[0] - c[0]) - halfW, 0);
-    const dy = Math.max(Math.abs(o[1] - c[1]) - halfH, 0);
+    const dx = Math.max(Math.abs(o[0] - c[0]) - halfW - (o[2] ?? 0), 0);
+    const dy = Math.max(Math.abs(o[1] - c[1]) - halfH - (o[3] ?? 0), 0);
     m = Math.min(m, Math.hypot(dx, dy));
   }
   return m;
 }
 
-/** The candidate whose label box keeps the most distance from the obstacles and stays inside the canvas (first on ties). */
-export function bestLabelSpot(cands: Pt[], halfW: number, halfH: number, obstacles: Pt[], bounds: { w: number; h: number }): Pt {
+/**
+ * The candidate whose label box keeps the most distance from the obstacles and stays inside the canvas (first on ties).
+ * Clearance beyond ``enough`` counts the same, so an early (preferred) candidate with room wins over a later, emptier one.
+ */
+export function bestLabelSpot(cands: Pt[], halfW: number, halfH: number, obstacles: Obstacle[], bounds: { w: number; h: number },
+                              enough = Infinity): Pt {
   let best: Pt | null = null;
   let bc = -Infinity;
   for (const c of cands) {
     if (c[0] - halfW < 2 || c[0] + halfW > bounds.w - 2 || c[1] - halfH < 2 || c[1] + halfH > bounds.h - 2) continue;
-    const cl = labelClearance(c, halfW, halfH, obstacles);
+    const cl = Math.min(labelClearance(c, halfW, halfH, obstacles), enough);
     if (cl > bc + 1e-9) { bc = cl; best = c; }
   }
   return best ?? cands[0];

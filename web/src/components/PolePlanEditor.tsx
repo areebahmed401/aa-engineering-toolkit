@@ -6,7 +6,7 @@ import {
   addMember, clipLine, clusterOffsets, contradictionPoint, directionArrow, displacedSegments, displacementFactor, emptyHistory, EMPTY_MODEL,
   fitView, GRID_STEPS, hasAngle, hitTest, memberAxis, modelBounds, moveNode, nodeAt, nodeById, panBy, pickNode, placeInfinityPoles, POLE_PRESETS,
   record, redo, removeMember, removeNode, removeSupport, rotateSupport, round6, bestLabelSpot, setSupport, setSupportAngle, snap, supportSide, toModel, toScreen,
-  toggleJoint, toolInputs, undo, zoomAt, type Hit, type History, type JointKind, type PoleModel, type PoleResult, type PoleSupportKind, type Pt, type View,
+  toggleJoint, toolInputs, undo, zoomAt, type Hit, type History, type JointKind, type Obstacle, type PoleModel, type PoleResult, type PoleSupportKind, type Pt, type View,
 } from "../lib/polplan";
 import { cn } from "./ui";
 
@@ -392,29 +392,64 @@ export function PolePlanEditor({ model, onModel, result, stale }: Props) {
   const dispSegments = showDisp && result && result.movable && dispFactor > 0 ? displacedSegments(model, result, dispFactor) : [];
 
   // label layout: spots with the most room around them
-  const taken: Pt[] = [
+  const taken: Obstacle[] = [
     ...poleScreen.map((q, i) => [q[0] + poleOff[i][0], q[1] + poleOff[i][1]] as Pt),
     ...(overlay ? overlay.bodies.flatMap((b) => { const q = S(b.label); return [[q[0] - 9, q[1] - 15], [q[0] + 9, q[1] - 15]] as Pt[]; }) : []),
     ...model.nodes.map((n) => S([n.x, n.y])),
-    ...boltScreen,
+    ...boltScreen.map((p, i) => [p[0] + 10 + boltOff[i][0], p[1] - 14 + boltOff[i][1], 7, 12] as Obstacle),
   ];
+  // points along a screen segment, so labels stay off bars and other lines
+  const along = (a: Pt, b: Pt, gap: number) => {
+    const k = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / gap));
+    for (let i = 0; i <= k; i++) taken.push([a[0] + (b[0] - a[0]) * i / k, a[1] + (b[1] - a[1]) * i / k]);
+  };
+  for (const mem of model.members) {
+    const a = nodeById(model, mem.a); const b = nodeById(model, mem.b);
+    if (a && b) along(S([a.x, a.y]), S([b.x, b.y]), 12);
+  }
   // keep labels clear of the zoom buttons and the legend box
-  for (let y = 8; y <= 112; y += 18) for (const x of [w - 40, w - 22]) taken.push([x, y]);
-  if (infinite && infinite.legend.length) for (let y = 8; y <= 56; y += 16) for (let x = 8; x <= 150; x += 24) taken.push([x, y]);
+  taken.push([w - 31, 52, 20, 52], [w - 62, h - 30, 58, 10]);
+  // and off the axis tick numbers (left column, bottom row)
+  taken.push([12, h / 2, 12, h / 2], [w / 2, h - 8, w / 2, 8]);
+  if (infinite && infinite.legend.length) taken.push([80, 26, 78, 24]);
   const place = (cands: Pt[], halfW: number): Pt => {
-    const at = bestLabelSpot(cands, halfW, 7, taken, { w, h });
-    taken.push(at, [at[0] - halfW, at[1]], [at[0] + halfW, at[1]]);
+    const at = bestLabelSpot(cands, halfW, 7, taken, { w, h }, 10);
+    taken.push([at[0], at[1], halfW, 7]);
     return at;
   };
   const goLines: { key: string; label: string; a: Pt; b: Pt; at: Pt }[] = [];
   if (overlay && showGo) {
+    const segs = overlay.loci.map((l) => { const seg = clipLine(l.point, l.direction, rect); return seg ? [S(seg[0]), S(seg[1])] as [Pt, Pt] : null; });
+    // a label may sit on its own line's side, but not on another G.O. line
+    const lineMarks = segs.map(() => [] as Pt[]);
+    segs.forEach((s, i) => {
+      if (!s) return;
+      const k = Math.max(1, Math.ceil(Math.hypot(s[1][0] - s[0][0], s[1][1] - s[0][1]) / 14));
+      for (let j = 0; j <= k; j++) lineMarks[i].push([s[0][0] + (s[1][0] - s[0][0]) * j / k, s[0][1] + (s[1][1] - s[0][1]) * j / k]);
+    });
     overlay.loci.forEach((l, i) => {
-      const seg = clipLine(l.point, l.direction, rect);
-      if (!seg) return;
-      const a = S(seg[0]); const b = S(seg[1]);
+      const s = segs[i];
+      if (!s) return;
+      const [a, b] = s;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      let n: Pt = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+      if (n[1] > 0) n = [-n[0], -n[1]]; // the "above" side first
+      const halfW = l.label.length * 3.3 + 2;
+      const off = 9 + Math.abs(n[0]) * halfW; // steep lines need the label pushed sideways by its half width
       const cands: Pt[] = [];
-      for (let t = 0.06; t <= 0.941; t += 0.04) cands.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - 9]);
-      goLines.push({ key: `${l.label}${i}`, label: l.label, a, b, at: place(cands, l.label.length * 3.3 + 2) });
+      // near the middle and close to the line first; further out only when that is crowded
+      const ts = [0.5];
+      for (let d = 0.04; d <= 0.441; d += 0.04) ts.push(0.5 - d, 0.5 + d);
+      for (const o of [off, off + 14]) {
+        for (const t of ts) {
+          for (const side of [1, -1]) cands.push([a[0] + (b[0] - a[0]) * t + n[0] * o * side, a[1] + (b[1] - a[1]) * t + n[1] * o * side]);
+        }
+      }
+      const others = lineMarks.filter((_, j) => j !== i).flat();
+      taken.push(...others);
+      const at = place(cands, halfW);
+      taken.splice(taken.length - 1 - others.length, others.length);
+      goLines.push({ key: `${l.label}${i}`, label: l.label, a, b, at });
     });
   }
   const infMarks = (infinite?.marks ?? []).map((m) => {
@@ -467,9 +502,12 @@ export function PolePlanEditor({ model, onModel, result, stale }: Props) {
           ))}
         </div>
         <div className="min-w-0 flex-1 space-y-3">
+        {/* canvas */}
+        <div ref={wrap} className="relative h-[min(68vh,540px)] min-h-[300px] w-full overflow-hidden rounded-xl border border-border bg-surface" data-testid="pole-canvas-wrap">
+        {/* floats over the canvas so selecting a support doesn't shift the drawing */}
         {selSupport && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg/60 px-3 py-2 text-xs" data-testid="support-controls">
-            <span className="font-medium capitalize">{selSupport.kind} at {selSupport.node}</span>
+          <div className="absolute bottom-2 left-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 px-3 py-2 text-xs shadow-sm" data-testid="support-controls">
+            <span className="inline-block font-medium first-letter:uppercase">{selSupport.kind} at {selSupport.node}</span>
             {hasAngle(selSupport.kind) ? (
               <>
                 <span className="text-muted">free direction</span>
@@ -487,9 +525,6 @@ export function PolePlanEditor({ model, onModel, result, stale }: Props) {
             <button type="button" className="ml-auto inline-flex items-center gap-1 text-fail hover:underline" onClick={deleteSelection}><Trash2 className="h-3.5 w-3.5" /> Remove</button>
           </div>
         )}
-
-        {/* canvas */}
-        <div ref={wrap} className="relative h-[min(68vh,540px)] min-h-[300px] w-full overflow-hidden rounded-xl border border-border bg-surface" data-testid="pole-canvas-wrap">
           {w > 0 && h > 0 && (
             <svg ref={svg} width={w} height={h} className={cn("block select-none text-ink", cursor)} data-testid="pole-canvas" data-view={`${view.cx},${view.cy},${view.scale}`}
               style={{ touchAction: tool === "pan" ? "none" : "pan-y" }}
@@ -703,7 +738,7 @@ export function PolePlanEditor({ model, onModel, result, stale }: Props) {
             {hover ? `x ${round6(hover[0])} m · y ${round6(hover[1])} m` : "x · y in m"}
           </div>
           {empty && <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-muted">Pick the Bar tool (B) and click two points to draw a first bar, or load an example.</div>}
-          {barStart && <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-surface/80 px-2 py-0.5 text-[11px] text-muted">Click the next point · Esc stops the chain</div>}
+          {barStart && !selSupport && <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-surface/80 px-2 py-0.5 text-[11px] text-muted">Click the next point · Esc stops the chain</div>}
         </div>
 
         {/* overlay toggles */}
