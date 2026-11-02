@@ -4,14 +4,17 @@ export type UnitSystem = "SI" | "Imperial";
 
 type Conv = { unit: string; toSI: (v: number) => number; fromSI: (v: number) => number };
 
+// Offset conversions leave float noise (273.15 K - 273.15 → -1e-13): treat it as exactly zero.
+const snap = (v: number) => (Math.abs(v) < 1e-9 ? 0 : v);
+
 const lin = (unit: string, factor: number): Conv => ({ unit, toSI: (v) => v * factor, fromSI: (v) => v / factor });
 const same = (unit: string): Conv => lin(unit, 1);
 
 // SI unit (as written by the Python package) -> display conversion per unit system
 const TABLE: Record<string, Record<UnitSystem, Conv>> = {
   K: {
-    SI: { unit: "°C", toSI: (v) => v + 273.15, fromSI: (v) => v - 273.15 },
-    Imperial: { unit: "°F", toSI: (v) => (v - 32) / 1.8 + 273.15, fromSI: (v) => (v - 273.15) * 1.8 + 32 },
+    SI: { unit: "°C", toSI: (v) => v + 273.15, fromSI: (v) => snap(v - 273.15) },
+    Imperial: { unit: "°F", toSI: (v) => (v - 32) / 1.8 + 273.15, fromSI: (v) => snap((v - 273.15) * 1.8 + 32) },
   },
   "ΔK": { SI: lin("Δ°C", 1), Imperial: lin("Δ°F", 1 / 1.8) },
   Pa: { SI: lin("kPa", 1e3), Imperial: lin("psi", 6894.757293168) },
