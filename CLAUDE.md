@@ -1,7 +1,7 @@
 # AA Engineering Toolkit: notes for Claude (Chef, Workers, Testers)
 
 Python package `engtoolkit` (src/) + React/Pyodide web app (web/) deployed to GitHub Pages on every push to `main`.
-Work is run with the user-level `kitchen-brigade` skill: only Chef commits, pushes and merges.
+Work is run with the user-level `dev-team` skill ("my dev team"): only Chef commits, pushes and merges.
 
 ## Environment (Windows)
 - Python venv: `C:\Users\ahmed\.venvs\engineering-toolkit\Scripts\python.exe` (short path because of the Windows 260-char limit; the repo lives at `C:\dev\engineering-toolkit`). Worktrees use `C:\Users\ahmed\.venvs\etk-<name>`.
