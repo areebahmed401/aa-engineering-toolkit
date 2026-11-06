@@ -150,3 +150,20 @@ def test_vacuum_pumpdown_and_continuous_load():
     assert c.y_steam + c.y_co2 == pytest.approx(1.0)
     with pytest.raises(ValueError):
         continuous_load(101325, 350.0, 0.01, 0.001)  # water not superheated
+
+
+def test_cycle_path_follows_isobars_and_isenthalp():
+    import numpy as np
+
+    from engtoolkit.thermo.cycles import cycle_path
+    r = refrigeration_cycle("R134a", 273.15, 313.15, 10e3, superheat=5, subcooling=3)
+    s1, s2, s3, s4 = r.states
+    p = cycle_path("R134a", r.states)
+    T, P, h = np.array(p["T"]), np.array(p["P"]), np.array(p["h"])
+    # condensing and evaporating happen at constant temperature inside the dome
+    dome_cond = (P == s2.P) & (h < s2.h) & (h > s3.h) & (np.abs(T - 313.15) < 0.01)
+    dome_evap = (P == s4.P) & (h > s4.h) & (h < s1.h) & (np.abs(T - 273.15) < 0.01)
+    assert dome_cond.sum() > 10 and dome_evap.sum() > 10
+    # throttling at constant enthalpy, path closed back to state 1
+    assert np.sum(np.isclose(h, s3.h) & (P < s3.P) & (P > s4.P)) > 5
+    assert (p["s"][-1], p["T"][-1]) == (s1.s, s1.T)

@@ -100,6 +100,40 @@ def refrigeration_cycle(refrigerant: str, T_evap: float, T_cond: float, compress
     )
 
 
+def cycle_path(refrigerant: str, states: list[CycleState], n: int = 12) -> dict[str, list[float]]:
+    """
+    The cycle's processes traced through real states (for plotting), not straight lines between points:
+    1→2 compression (log P linear in h), 2→3 condenser and 4→1 evaporator at constant pressure (so
+    condensing/evaporating run at constant temperature inside the dome), 3→4 throttling at constant h.
+    Returns lists h, P, s, T [SI] in order, closed back to state 1.
+    """
+    import numpy as np
+
+    from engtoolkit.materials import fluid
+    f = fluid(refrigerant)  # one reused AbstractState: far cheaper than PropsSI per point in the browser
+    s1, s2, s3, s4 = states
+    legs = [
+        (np.linspace(s1.h, s2.h, n), np.geomspace(s1.P, s2.P, n)),       # compression
+        (np.linspace(s2.h, s3.h, 3 * n), np.full(3 * n, s2.P)),           # condenser (isobaric)
+        (np.full(n, s3.h), np.geomspace(s3.P, s4.P, n)),                  # expansion valve (isenthalpic)
+        (np.linspace(s4.h, s1.h, 2 * n), np.full(2 * n, s4.P)),           # evaporator (isobaric)
+    ]
+    out: dict[str, list[float]] = {"h": [], "P": [], "s": [], "T": []}
+    for hs, Ps in legs:
+        for h, P in zip(hs[:-1], Ps[:-1]):  # each leg's end is the next leg's start
+            try:
+                T, s = f.props(("T", "s"), P=float(P), H=float(h))
+            except ValueError:
+                continue
+            out["h"].append(float(h))
+            out["P"].append(float(P))
+            out["s"].append(s)
+            out["T"].append(T)
+    for key, value in (("h", s1.h), ("P", s1.P), ("s", s1.s), ("T", s1.T)):
+        out[key].append(value)
+    return out
+
+
 def refrigerant_info(refrigerant: str) -> dict[str, float]:
     """Environmental (GWP100, GWP20, ODP) and hazard (HH, FH, PH) ratings; NaN where CoolProp has none."""
     out = {}

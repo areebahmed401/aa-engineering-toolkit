@@ -1,12 +1,15 @@
 // Dedicated structural page: section designer + beam builder with a live free-body diagram + torsion of a cantilever
-// + shear flow of thin-walled sections. All numbers come from the Python tools structural.section_properties,
-// structural.beam_analysis, structural.torsion and structural.shear_flow.
+// + pole plan (kinematic movability) of a drawn planar system + shear flow of thin-walled sections.
+// All numbers come from the Python tools structural.section_properties, structural.beam_analysis, structural.torsion,
+// structural.pole_plan and structural.shear_flow.
 import { BookOpen, Calculator, Check, CircleAlert, CircleCheck, FileDown, Link2, Plus, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { ChartView } from "../components/ChartView";
 import { FbdDiagram } from "../components/FbdDiagram";
 import { NumberInput, type Conversion } from "../components/NumberInput";
+import { PolePlanEditor } from "../components/PolePlanEditor";
+import { PolePlanPanel } from "../components/PolePlanPanel";
 import { SectionDrawing } from "../components/SectionDrawing";
 import { StressSection } from "../components/StressSection";
 import { ShearFlowTab } from "./ShearFlowTab";
@@ -15,20 +18,22 @@ import { cn, SECTION_META, Spinner } from "../components/ui";
 import { useEngine } from "../lib/engine";
 import { usePrefs } from "../lib/prefs";
 import { download, markdownReport } from "../lib/report";
+import { hasMembers, parsePoleResult, poleReportExtra } from "../lib/polplan";
 import { defaultValues, fieldsFromSchema } from "../lib/schema";
 import {
   BEAM_TOOL, beamInputs, defaultState, determinacy, fromToolInputs, LOAD_UNITS, loadErrors, mergeState, SECTION_TOOL,
-  sectionInputs, shapeMeta, shearError, shearInputs, SHEAR_TOOL, stateDiff, stressAt, SUPPORTS, TORSION_TOOL, torsionError, torsionInputs, type BeamValues, type FbdFormat, type Load, type LoadKind,
+  POLE_TOOL, polesInputs, sectionInputs, shapeMeta, shearError, shearInputs, SHEAR_TOOL, stateDiff, stressAt, SUPPORTS, TORSION_TOOL, torsionError, torsionInputs, type BeamValues, type FbdFormat, type Load, type LoadKind,
   type Reactions, type StructuralState, type SupportKind,
 } from "../lib/structural";
-import type { ResultField, RunResponse } from "../lib/types";
+import type { ResultField, RunError, RunResponse } from "../lib/types";
 import { decodeInputs, encodeInputs } from "../lib/urlState";
 import { formatNumber, type UnitSystem } from "../lib/units";
 
-type Tab = "section" | "beam" | "torsion" | "shear";
-const TOOL_OF: Record<Tab, string> = { section: SECTION_TOOL, beam: BEAM_TOOL, torsion: TORSION_TOOL, shear: SHEAR_TOOL };
-const TAB_OF: Record<string, Tab> = { [SECTION_TOOL]: "section", [BEAM_TOOL]: "beam", [TORSION_TOOL]: "torsion", [SHEAR_TOOL]: "shear" };
-const TAB_LABEL: Record<Tab, string> = { section: "1 · Section", beam: "2 · Beam", torsion: "3 · Torsion", shear: "4 · Shear flow" };
+type Tab = "section" | "beam" | "torsion" | "poles" | "shear";
+const TABS: Tab[] = ["section", "beam", "torsion", "poles", "shear"];
+const TOOL_OF: Record<Tab, string> = { section: SECTION_TOOL, beam: BEAM_TOOL, torsion: TORSION_TOOL, poles: POLE_TOOL, shear: SHEAR_TOOL };
+const TAB_OF: Record<string, Tab> = { [SECTION_TOOL]: "section", [BEAM_TOOL]: "beam", [TORSION_TOOL]: "torsion", [POLE_TOOL]: "poles", [SHEAR_TOOL]: "shear" };
+const TAB_LABEL: Record<Tab, string> = { section: "1 · Section", beam: "2 · Beam", torsion: "3 · Torsion", poles: "4 · Pole plan", shear: "5 · Shear flow" };
 
 /** Tools that open this page instead of the generic form. */
 export const STRUCTURAL_PAGE_TOOLS = new Set(Object.keys(TAB_OF));
@@ -59,16 +64,18 @@ export function StructuralPage() {
   const { schema, choices, progress, run } = useEngine();
   const { units } = usePrefs();
   const tabParam = params.get("tab");
-  const tab: Tab = tabParam === "beam" || tabParam === "torsion" || tabParam === "shear" ? tabParam : "section";
+  const tab: Tab = tabParam === "beam" || tabParam === "torsion" || tabParam === "poles" || tabParam === "shear" ? tabParam : "section";
   const urlI = params.get("i");
 
   const sectionTool = schema?.tools.find((t) => t.id === SECTION_TOOL);
   const beamTool = schema?.tools.find((t) => t.id === BEAM_TOOL);
   const torsionTool = schema?.tools.find((t) => t.id === TORSION_TOOL);
-  const shearTool = schema?.tools.find((t) => t.id === SHEAR_TOOL);
+  const poleTool = schema?.tools.find((t) => t.id === POLE_TOOL);
   const sectionFields = useMemo(() => (sectionTool ? fieldsFromSchema(sectionTool.inputs) : []), [sectionTool]);
   const beamFields = useMemo(() => (beamTool ? fieldsFromSchema(beamTool.inputs) : []), [beamTool]);
   const torsionFields = useMemo(() => (torsionTool ? fieldsFromSchema(torsionTool.inputs) : []), [torsionTool]);
+  const poleFields = useMemo(() => (poleTool ? fieldsFromSchema(poleTool.inputs) : []), [poleTool]);
+  const shearTool = schema?.tools.find((t) => t.id === SHEAR_TOOL);
   const shearFields = useMemo(() => (shearTool ? fieldsFromSchema(shearTool.inputs) : []), [shearTool]);
   const defaults = useMemo(
     () => (sectionTool && beamTool && torsionTool && shearTool
@@ -113,7 +120,9 @@ export function StructuralPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encoded]);
 
-  const inputsFor = useCallback((t: Tab, s: StructuralState) => (t === "section" ? sectionInputs(s) : t === "beam" ? beamInputs(s) : t === "torsion" ? torsionInputs(s) : shearInputs(s)), []);
+  const inputsFor = useCallback((t: Tab, s: StructuralState) => (
+    t === "section" ? sectionInputs(s) : t === "beam" ? beamInputs(s) : t === "torsion" ? torsionInputs(s)
+      : t === "poles" ? polesInputs(s) : shearInputs(s)), []);
 
   const blocked = useMemo(() => {
     if (!state) return true;
@@ -122,6 +131,7 @@ export function StructuralPage() {
         || Object.keys(loadErrors(state.beam)).length > 0 || !(state.beam.length > 0);
     }
     if (tab === "torsion") return torsionError(state.torsion) !== null;
+    if (tab === "poles") return !hasMembers(state.poles);
     if (tab === "shear") return shearError(state.shear) !== null;
     return false;
   }, [state, tab]);
@@ -146,11 +156,11 @@ export function StructuralPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, tab, ready, blocked]);
 
-  if (!schema || !sectionTool || !beamTool || !torsionTool || !shearTool || !state || !defaults) {
+  if (!schema || !sectionTool || !beamTool || !torsionTool || !poleTool || !shearTool || !state || !defaults) {
     return <div className="flex items-center gap-2 text-muted"><Spinner /> Loading tools…</div>;
   }
 
-  const tool = tab === "section" ? sectionTool : tab === "beam" ? beamTool : tab === "torsion" ? torsionTool : shearTool;
+  const tool = tab === "section" ? sectionTool : tab === "beam" ? beamTool : tab === "torsion" ? torsionTool : tab === "poles" ? poleTool : shearTool;
   const current = stored[tab];
   const response = current?.res ?? null;
   const stale = current ? current.key !== key : false;
@@ -171,8 +181,9 @@ export function StructuralPage() {
   };
   const exportReport = () => {
     if (!response?.ok) return;
-    const fields = tab === "section" ? sectionFields : tab === "beam" ? beamFields : tab === "torsion" ? torsionFields : shearFields;
-    const md = markdownReport({ tool, fields, values: inputsFor(tab, state), results: response.result.fields, system: units, version: schema.version, link: link() });
+    const fields = tab === "section" ? sectionFields : tab === "beam" ? beamFields : tab === "torsion" ? torsionFields : tab === "poles" ? poleFields : shearFields;
+    const base = markdownReport({ tool, fields, values: inputsFor(tab, state), results: response.result.fields, system: units, version: schema.version, link: link() });
+    const md = tab === "poles" ? `${base}${poleReportExtra(parsePoleResult(response.result.fields))}` : base;
     download(`${tool.id}.md`, md, "text/markdown");
   };
 
@@ -189,7 +200,7 @@ export function StructuralPage() {
             <p className="max-w-3xl text-muted">{tool.description}</p>
           </div>
           <div className="flex rounded-xl border border-border bg-surface p-1 text-sm" role="tablist">
-            {(["section", "beam", "torsion", "shear"] as const).map((t) => (
+            {TABS.map((t) => (
               <button key={t} role="tab" aria-selected={tab === t} data-testid={`tab-${t}`}
                 className={cn("rounded-lg px-3 py-1.5 transition sm:px-4", tab === t ? "bg-primary text-on-primary shadow-sm" : "text-muted hover:text-ink")}
                 onClick={() => setTab(t)}>
@@ -206,7 +217,9 @@ export function StructuralPage() {
           ? <BeamTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />
           : tab === "torsion"
             ? <TorsionTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />
-            : <ShearFlowTab state={state} update={update} response={response} units={units} />}
+            : tab === "poles"
+              ? <PolesTab state={state} update={update} response={blocked ? null : response} stale={stale} blocked={blocked} />
+              : <ShearFlowTab state={state} update={update} response={response} units={units} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="btn-primary" disabled={busy || blocked} data-testid="calculate" onClick={() => void calculate(tab, state)}>
@@ -223,7 +236,7 @@ export function StructuralPage() {
           <FileDown className="h-4 w-4" /> Report
         </button>
         <span className="text-xs text-muted">
-          {blocked ? `Fix the ${tab} inputs above to see results.`
+          {blocked ? (tab === "poles" ? "Draw at least one bar to see results." : `Fix the ${tab} inputs above to see results.`)
             : !ready && progress.stage !== "error" ? `Python is loading (${progress.percent}%); results appear when it is ready.`
             : response?.ok ? `Updates live as you edit · ${response.elapsed_ms} ms${stale ? " · updating…" : ""}` : "Updates live as you edit"}
         </span>
@@ -691,3 +704,35 @@ function TorsionTab({ state, update, response, units, onEditSection }: {
   );
 }
 
+
+// ---------------- pole plan tab ----------------
+
+/** Model validation problems come back as field errors ("Value error, Sleeve node ..."): show their text. */
+function poleError(e: RunError): string {
+  const msgs = (e.fields ?? []).map((f) => f.msg.replace(/^Value error, /, ""));
+  return msgs.length ? msgs.join(" · ") : e.message;
+}
+
+function PolesTab({ state, update, response, stale, blocked }: {
+  state: StructuralState; update: Update; response: RunResponse | null; stale: boolean; blocked: boolean;
+}) {
+  const result = useMemo(() => (response?.ok ? parsePoleResult(response.result.fields) : null), [response]);
+  const onModel = useCallback((poles: StructuralState["poles"]) => update({ poles }), [update]);
+  return (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <Card title="Draw the system">
+        <PolePlanEditor model={state.poles} onModel={onModel} result={result} stale={stale} />
+        <p className="mt-3 text-xs text-muted">
+          Nodes and bars snap to the grid; click a bar with the Hinge, Sleeve or a support tool to insert a node there.
+          Sleeve and shear-release nodes need two collinear bars. A roller or sliding clamp is free to move along its angle (0° = horizontal).
+        </p>
+      </Card>
+      <Card title="Pole plan">
+        {blocked && <p className="text-sm text-muted" data-testid="pole-empty">Draw at least one bar, or load an example, to see the counting criterion and the pole plan.</p>}
+        {!blocked && !response && <p className="text-sm text-muted">The result appears here once Python is ready.</p>}
+        {!blocked && response && !response.ok && <ErrorBox message={poleError(response.error)} />}
+        {result && <PolePlanPanel result={result} stale={stale} />}
+      </Card>
+    </div>
+  );
+}

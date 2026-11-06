@@ -57,3 +57,10 @@ describe("formatting", () => {
     expect(toDisplay(5000, "J", "SI")).toBeCloseTo(5);
   });
 });
+
+describe("temperature offset noise", () => {
+  it("shows 0 °C / 32 °F for 273.15 K with float noise", () => {
+    expect(formatNumber(toDisplay(273.15 - 1.1e-13, "K", "SI"))).toBe("0");
+    expect(formatNumber(toDisplay(273.15 - 1.1e-13, "K", "Imperial"))).toBe("32");
+  });
+});

@@ -143,6 +143,11 @@ class Fluid:
         st.update(*CP.generate_update_pair(_PARAMS[k1], v1, _PARAMS[k2], v2))
         return st
 
+    def props(self, outputs: tuple[str, ...], **inputs) -> tuple[float, ...]:
+        """Several outputs from one flash, e.g. ``props(("T", "s"), P=..., H=...)`` (cheap in loops)."""
+        st = self._update(inputs)
+        return tuple(st.keyed_output(_OUTPUT_PARAMS.get(o) or CP.get_parameter_index(o)) for o in outputs)
+
     def prop(self, output: str, **inputs) -> float:
         """One output (toolkit name like 'rho', 'cp', or a CoolProp key like 'Dmass') for a state."""
         param = _OUTPUT_PARAMS.get(output)

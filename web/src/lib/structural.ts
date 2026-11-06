@@ -1,10 +1,12 @@
 // Pure logic for the structural page: state shape, determinacy, shape fields and the FBD layout.
 // The calculations themselves stay in Python (structural.section_properties / structural.beam_analysis).
+import { DEFAULT_POLE_MODEL, normalizeModel, POLE_TOOL, toolInputs, type PoleModel } from "./polplan";
 import type { JsonSchema, ToolSchema } from "./types";
 
 export const SECTION_TOOL = "structural.section_properties";
 export const BEAM_TOOL = "structural.beam_analysis";
 export const TORSION_TOOL = "structural.torsion";
+export { POLE_TOOL };
 export const SHEAR_TOOL = "structural.shear_flow";
 
 export type SupportKind = "fixed" | "pinned" | "roller" | "free";
@@ -29,7 +31,7 @@ export type ShearValues = ShearGeometry & {
   Q2: number; Q3: number; Mt: number; load_at_shear_centre: boolean; a2: number; a3: number;
 };
 /** Everything the page edits: the section and material are shared by the first three tabs. */
-export type StructuralState = { section: SectionValues; material: string; beam: BeamValues; torsion: TorsionValues; shear: ShearValues };
+export type StructuralState = { section: SectionValues; material: string; beam: BeamValues; torsion: TorsionValues; poles: PoleModel; shear: ShearValues };
 
 const TORSION_DEFAULTS: TorsionValues = { length: 1, torque: 200, position: 1 };
 
@@ -68,6 +70,12 @@ export function torsionInputs(s: StructuralState): Record<string, unknown> {
   return { section: s.section, material: s.material, ...s.torsion };
 }
 
+/** The pole-plan tab has its own model (no section or material). */
+export function polesInputs(s: StructuralState): Record<string, unknown> {
+  return { ...toolInputs(s.poles) };
+}
+
+/** The shear-flow tab has its own drawn thin-walled section. */
 export function shearInputs(s: StructuralState): Record<string, unknown> {
   return { ...s.shear };
 }
@@ -75,6 +83,7 @@ export function shearInputs(s: StructuralState): Record<string, unknown> {
 /** Page defaults from the tools' schema defaults. */
 export function defaultState(
   sectionDefaults: Record<string, unknown>, beamDefaults: Record<string, unknown>, torsionDefaults: Record<string, unknown> = {},
+  poles: PoleModel = DEFAULT_POLE_MODEL,
 ): StructuralState {
   const { section, material, ...beam } = beamDefaults;
   const { section: _s, material: _m, ...torsion } = torsionDefaults;
@@ -83,6 +92,7 @@ export function defaultState(
     material: String(material ?? sectionDefaults.material ?? "Steel"),
     beam: beam as unknown as BeamValues,
     torsion: { ...TORSION_DEFAULTS, ...torsion } as TorsionValues,
+    poles,
     shear: defaultShear(),
   };
 }
@@ -95,6 +105,7 @@ export function mergeState(defaults: StructuralState, partial: Record<string, un
     material: typeof p.material === "string" ? p.material : defaults.material,
     beam: { ...defaults.beam, ...(p.beam ?? {}) },
     torsion: { ...defaults.torsion, ...(p.torsion ?? {}) },
+    poles: normalizeModel(p.poles) ?? defaults.poles,
     shear: { ...defaults.shear, ...(p.shear ?? {}) },
   };
 }
@@ -114,6 +125,7 @@ export function stateDiff(state: StructuralState, defaults: StructuralState): Re
   if (Object.keys(beam).length) out.beam = beam;
   const torsion = diff(state.torsion as unknown as Record<string, unknown>, defaults.torsion as unknown as Record<string, unknown>);
   if (Object.keys(torsion).length) out.torsion = torsion;
+  if (JSON.stringify(state.poles) !== JSON.stringify(defaults.poles)) out.poles = state.poles;
   const shear = diff(state.shear as unknown as Record<string, unknown>, defaults.shear as unknown as Record<string, unknown>);
   if (Object.keys(shear).length) out.shear = shear;
   return out;
@@ -125,6 +137,7 @@ export function fromToolInputs(toolId: string, values: Record<string, unknown>):
     const { material, ...section } = values;
     return { ...(Object.keys(section).length ? { section } : {}), ...(material !== undefined ? { material } : {}) };
   }
+  if (toolId === POLE_TOOL) return Object.keys(values).length ? { poles: values } : {};
   if (toolId === SHEAR_TOOL) return Object.keys(values).length ? { shear: values } : {};
   const { section, material, ...rest } = values;
   const key = toolId === TORSION_TOOL ? "torsion" : "beam";

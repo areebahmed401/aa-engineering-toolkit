@@ -141,6 +141,7 @@ test("shear flow tab: channel plot, shear centre and steps; canvas editing; clos
 
   // canvas: add a wall from node 2 to a new grid point on its left
   await page.getByTestId("shear-mode-wall").click();
+  await page.getByTestId("shear-node-2").scrollIntoViewIfNeeded(); // mouse clicks need the node inside the viewport
   const box = await page.getByTestId("shear-node-2").locator("circle").boundingBox();
   const cx = box!.x + box!.width / 2;
   const cy = box!.y + box!.height / 2;

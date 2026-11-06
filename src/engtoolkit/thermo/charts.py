@@ -1,6 +1,8 @@
 """Chart specs for the thermo tools (SI units; front ends convert for display)."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from engtoolkit.catalogs import pipes
@@ -16,7 +18,9 @@ PRIMARY, ACCENT, ORANGE, RED = "#E0A800", "#2A9D8F", "#C8632B", "#DC2626"
 def saturation_dome(fluid_name: str, n: int = 50):
     """Saturated liquid and vapour states from near the triple point to near the critical point."""
     f = fluid(fluid_name)
-    T = np.linspace(max(f.T_triple, f.T_min) + 0.5, f.T_critical - 0.5, n)
+    T_low, T_top = max(f.T_triple, f.T_min) + 0.5, f.T_critical - 0.01
+    # denser towards the critical point, where the dome turns over sharply
+    T = T_low + (T_top - T_low) * np.sin(np.linspace(0, np.pi / 2, n))
     liq, vap = [], []
     for t in T:
         try:
@@ -25,22 +29,37 @@ def saturation_dome(fluid_name: str, n: int = 50):
             continue
         liq.append(a)
         vap.append(b)
+    if liq:  # close the dome: both curves meet at (about) the critical point
+        top = SimpleNamespace(**{k: 0.5 * (getattr(liq[-1], k) + getattr(vap[-1], k)) for k in ("h", "P", "s", "T")})
+        liq.append(top)
+        vap.append(top)
     return liq, vap
 
 
-def _dome_charts(fluid_name: str, points, labels=(), close: bool = False, title_suffix: str = "") -> list[Chart]:
+def _dome_charts(fluid_name: str, points, labels=(), close: bool = False, title_suffix: str = "",
+                 path: dict | None = None) -> list[Chart]:
+    """``path`` (h, P, s, T lists) draws the processes through real states; the points are then markers only."""
     liq, vap = saturation_dome(fluid_name)
     pts = list(points) + ([points[0]] if close and points else [])
     mode = "lines+markers" if len(pts) > 1 else "markers"
+    name = "State" if len(points) == 1 else "Cycle"
+
+    def overlay(x: str, y: str) -> list[Series]:
+        if path is None:
+            return [Series(name, [getattr(p, x) for p in pts], [getattr(p, y) for p in pts], mode=mode, color=ORANGE)]
+        return [Series(name, path[x], path[y], color=ORANGE),
+                Series("States", [getattr(p, x) for p in points], [getattr(p, y) for p in points],
+                       mode="markers", color=ORANGE)]
+
     ph = Chart("ph", f"p-h diagram{title_suffix}", "Enthalpy", "J/kg", "Pressure", "Pa", log_y=True, series=[
         Series("Saturated liquid", [s.h for s in liq], [s.P for s in liq], color=PRIMARY),
         Series("Saturated vapour", [s.h for s in vap], [s.P for s in vap], color=ACCENT),
-        Series("State" if len(points) == 1 else "Cycle", [p.h for p in pts], [p.P for p in pts], mode=mode, color=ORANGE),
+        *overlay("h", "P"),
     ])
     ts = Chart("ts", f"T-s diagram{title_suffix}", "Entropy", "J/(kg·K)", "Temperature", "K", series=[
         Series("Saturated liquid", [s.s for s in liq], [s.T for s in liq], color=PRIMARY),
         Series("Saturated vapour", [s.s for s in vap], [s.T for s in vap], color=ACCENT),
-        Series("State" if len(points) == 1 else "Cycle", [p.s for p in pts], [p.T for p in pts], mode=mode, color=ORANGE),
+        *overlay("s", "T"),
     ])
     return [ph, ts]
 
@@ -105,4 +124,6 @@ def insulation_thickness_charts(inp, res) -> list[Chart]:
 
 
 def refrigeration_cycle_charts(inp, res) -> list[Chart]:
-    return _dome_charts(inp.refrigerant, res.states, close=True, title_suffix=f": {inp.refrigerant}")
+    from .cycles import cycle_path
+    return _dome_charts(inp.refrigerant, res.states, close=True, title_suffix=f": {inp.refrigerant}",
+                        path=cycle_path(inp.refrigerant, res.states))

@@ -1,7 +1,8 @@
-import { Github, Menu, Moon, Search, Sun, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { ChevronDown, Github, Menu, Moon, Pin, PinOff, Search, Sun, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useEngine } from "../lib/engine";
+import { buildNav } from "../lib/nav";
 import { usePrefs } from "../lib/prefs";
 import { EngineStatus } from "./EngineStatus";
 import { Wordmark } from "./Logo";
@@ -11,76 +12,220 @@ const REPO = "https://github.com/areebahmed401/aa-engineering-toolkit";
 
 const HEADER_BTN = "btn border border-white/15 p-2 text-white hover:bg-white/10";
 
+const OPEN_DELAY_MS = 120;
+const CLOSE_DELAY_MS = 250;
+
 export function Layout() {
   const { schema } = useEngine();
-  const { units, setUnits, theme, toggleTheme } = usePrefs();
+  const { units, setUnits, theme, toggleTheme, sidebarPinned, setSidebarPinned } = usePrefs();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
   const sections = schema?.sections ?? {};
-  const toolsBySection = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const out: Record<string, NonNullable<typeof schema>["tools"]> = {};
-    for (const t of schema?.tools ?? []) {
-      const hay = `${t.name} ${t.description} ${t.tags.join(" ")}`.toLowerCase();
-      if (q && !hay.includes(q)) continue;
-      (out[t.section] ??= []).push(t);
-    }
-    return out;
-  }, [schema, query]);
+  const tools = schema?.tools ?? [];
+  const nav = useMemo(() => buildNav(schema?.tools ?? [], query), [schema, query]);
+  const firstTool = (id: string) => tools.find((t) => t.section === id);
+  const searching = query.trim() !== "";
+
+  // Sections start collapsed except the current tool's domain; reset on every route change and whenever a panel opens.
+  const currentSection = location.pathname.startsWith("/structural") ? "structural" : /^\/tool\/([a-z_]+)\./.exec(location.pathname)?.[1];
+  const baseSet = (extra?: string) => new Set([...(currentSection ? [currentSection] : []), ...(extra ? [extra] : [])]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => baseSet());
+  useEffect(() => {
+    setExpanded(baseSet());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+  const toggleSection = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  // Desktop hover overlay (only while unpinned)
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const openTimer = useRef<number>();
+  const closeTimer = useRef<number>();
+  const mouseInside = useRef(false);
+  const focusSearch = useRef(false);
+  const clearTimers = () => {
+    window.clearTimeout(openTimer.current);
+    window.clearTimeout(closeTimer.current);
+  };
+  const openOverlay = (extra?: string) => {
+    clearTimers();
+    setExpanded(baseSet(extra));
+    setOverlayOpen(true);
+  };
+  const closeOverlay = () => {
+    clearTimers();
+    setOverlayOpen(false);
+  };
+  const scheduleClose = () => {
+    window.clearTimeout(openTimer.current);
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      const ae = document.activeElement as HTMLElement | null;
+      const keyboardInside = !!ae && !!asideRef.current?.contains(ae) && ae.matches(":focus-visible");
+      if (!mouseInside.current && !keyboardInside && query.trim() === "") setOverlayOpen(false);
+    }, CLOSE_DELAY_MS);
+  };
+  useEffect(() => () => clearTimers(), []);
+  useEffect(() => {
+    if (overlayOpen && focusSearch.current) searchRef.current?.focus();
+    focusSearch.current = false;
+  }, [overlayOpen]);
+  useEffect(() => {
+    if (sidebarPinned) closeOverlay();
+  }, [sidebarPinned]);
+
+  // Ctrl/Cmd+B pins/unpins the desktop panel (ignored while typing)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "b") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      e.preventDefault();
+      setSidebarPinned(!sidebarPinned);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarPinned, setSidebarPinned]);
+
+  const tab = new URLSearchParams(location.search).get("tab") ?? "section";
+  const isActive = (to: string) => {
+    const [path, search = ""] = to.split("?");
+    if (location.pathname !== path) return false;
+    return !search || new URLSearchParams(search).get("tab") === tab;
+  };
 
   const sidebar = (
-    <nav className="flex h-full flex-col gap-5 overflow-y-auto p-4" onClick={() => setMenuOpen(false)}>
-      <label className="relative block" onClick={(e) => e.stopPropagation()}>
-        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted" />
-        <input className="input pl-9" placeholder="Search tools…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search tools" />
-      </label>
+    <nav
+      data-testid="sidebar"
+      className="flex h-full flex-col gap-3 overflow-y-auto p-4"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) {
+          setMenuOpen(false);
+          closeOverlay();
+        }
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <label className="relative block min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted" />
+          <input ref={searchRef} className="input pl-9" placeholder="Search tools…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search tools" />
+        </label>
+        <button
+          data-testid="sidebar-collapse"
+          className="btn hidden shrink-0 p-2 text-muted hover:bg-bg hover:text-ink lg:inline-flex"
+          onClick={() => {
+            if (sidebarPinned) {
+              setSidebarPinned(false);
+              setOverlayOpen(true); // the pointer is still over the panel: keep it open as an overlay
+            } else {
+              setSidebarPinned(true);
+            }
+          }}
+          aria-label={sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
+          aria-pressed={sidebarPinned}
+          title={sidebarPinned ? "Unpin sidebar (Ctrl+B)" : "Pin sidebar (Ctrl+B)"}
+        >
+          {sidebarPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </button>
+      </div>
       {Object.entries(sections).map(([id, name]) => {
         const meta = SECTION_META[id];
         const Icon = meta?.icon;
-        const tools = toolsBySection[id] ?? [];
+        const sec = nav[id];
+        if (searching && !sec) return null;
+        const open = searching || expanded.has(id);
+        const count = sec?.count ?? 0;
         return (
-          <div key={id}>
-            <div className="mb-1.5 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          <div key={id} data-testid={`sidebar-section-${id}`}>
+            <button
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted transition hover:bg-bg hover:text-ink"
+              aria-expanded={open}
+              aria-controls={`sidebar-panel-${id}`}
+              onClick={() => !searching && toggleSection(id)}
+            >
               {Icon && <Icon className={cn("h-3.5 w-3.5", meta.text)} />}
-              {name}
+              <span className="flex-1 text-left">{name}</span>
+              {count > 0 && <span className="rounded-full bg-bg px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal">{count}</span>}
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !open && "-rotate-90")} />
+            </button>
+            <div id={`sidebar-panel-${id}`} hidden={!open} className="mt-1">
+              {!sec ? (
+                <p className="px-2 text-xs italic text-muted">Coming soon</p>
+              ) : (
+                sec.groups.map((g) => (
+                  <div key={g.label} className="mb-2">
+                    <div className="px-2 pb-0.5 pt-1 text-[11px] font-medium text-muted">{g.label}</div>
+                    <ul className="space-y-0.5">
+                      {g.items.map((it) => (
+                        <li key={it.key}>
+                          <Link
+                            to={it.to}
+                            aria-current={isActive(it.to) ? "page" : undefined}
+                            className={cn(
+                              "block rounded-lg px-2 py-1.5 text-sm transition",
+                              isActive(it.to) ? "border-l-2 border-primary bg-primary/15 font-medium text-ink" : "border-l-2 border-transparent text-ink hover:bg-bg",
+                            )}
+                          >
+                            {it.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              )}
             </div>
-            {tools.length === 0 ? (
-              <p className="px-2 text-xs italic text-muted">{query ? "No matches" : "Coming soon"}</p>
-            ) : (
-              <ul className="space-y-0.5">
-                {tools.map((t) => (
-                  <li key={t.id}>
-                    <NavLink
-                      to={`/tool/${t.id}`}
-                      className={({ isActive }) =>
-                        cn(
-                          "block rounded-lg px-2 py-1.5 text-sm transition",
-                          isActive ? "border-l-2 border-primary bg-primary/15 font-medium text-ink" : "border-l-2 border-transparent text-ink hover:bg-bg",
-                        )
-                      }
-                    >
-                      {t.name}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         );
       })}
+      {searching && Object.keys(nav).length === 0 && <p className="px-2 text-xs italic text-muted">No matches</p>}
       <a href={`${import.meta.env.BASE_URL}docs/`} className="rounded-lg px-2 py-1.5 text-sm text-ink hover:bg-bg md:hidden">
         Docs
       </a>
     </nav>
   );
 
+  const rail = (
+    <div data-testid="sidebar-rail" className={cn("flex h-full flex-col items-center gap-2 py-4", overlayOpen && "invisible")}>
+      {Object.entries(sections).map(([id, name]) => {
+        const meta = SECTION_META[id];
+        const Icon = meta?.icon;
+        return (
+          <button
+            key={id}
+            className={cn("btn p-2 hover:bg-bg", currentSection === id && "bg-primary/15")}
+            title={name}
+            aria-label={name}
+            aria-current={currentSection === id ? "true" : undefined}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              openOverlay(id);
+            }}
+          >
+            {Icon && <Icon className={cn("h-4 w-4", meta.text)} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-30 border-b border-black/40 bg-header text-white">
         <div className="flex h-14 items-center gap-3 px-4">
-          <button className={HEADER_BTN + " lg:hidden"} onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle menu">
+          <button className={HEADER_BTN + " lg:hidden"} onClick={() => {
+              if (!menuOpen) setExpanded(baseSet());
+              setMenuOpen((o) => !o);
+            }}
+            aria-label="Toggle menu">
             {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
           <Link to="/" className="shrink-0">
@@ -88,7 +233,7 @@ export function Layout() {
           </Link>
           <nav className="ml-4 hidden items-center gap-1 md:flex">
             {Object.entries(sections).map(([id, name]) => {
-              const first = toolsBySection[id]?.[0];
+              const first = firstTool(id);
               const active = location.pathname.includes(`/tool/${id}.`);
               return (
                 <Link
@@ -131,7 +276,47 @@ export function Layout() {
       </header>
 
       <div className="flex flex-1">
-        <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-border bg-surface lg:block">{sidebar}</aside>
+        <aside
+          ref={asideRef}
+          className={cn(
+            "sticky top-14 z-20 hidden h-[calc(100vh-3.5rem)] shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block",
+            sidebarPinned ? "w-64 overflow-hidden" : "w-14",
+          )}
+          onMouseEnter={() => {
+            mouseInside.current = true;
+            if (sidebarPinned) return;
+            window.clearTimeout(closeTimer.current);
+            if (!overlayOpen) openTimer.current = window.setTimeout(() => openOverlay(), OPEN_DELAY_MS);
+          }}
+          onMouseLeave={() => {
+            mouseInside.current = false;
+            if (!sidebarPinned) scheduleClose();
+          }}
+          onFocus={(e) => {
+            if (sidebarPinned || overlayOpen || !(e.target as HTMLElement).matches(":focus-visible")) return;
+            focusSearch.current = true;
+            openOverlay();
+          }}
+          onBlur={(e) => {
+            if (!sidebarPinned && overlayOpen && !e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleClose();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && overlayOpen) closeOverlay();
+          }}
+        >
+          {sidebarPinned ? (
+            sidebar
+          ) : (
+            <>
+              {rail}
+              {overlayOpen && (
+                <div data-testid="sidebar-overlay" className="absolute inset-y-0 left-0 z-20 w-64 border-r border-border bg-surface shadow-xl">
+                  {sidebar}
+                </div>
+              )}
+            </>
+          )}
+        </aside>
         {menuOpen && (
           <div className="fixed inset-0 top-14 z-20 bg-ink/30 lg:hidden" onClick={() => setMenuOpen(false)}>
             <aside className="h-full w-72 border-r border-border bg-surface" onClick={(e) => e.stopPropagation()}>

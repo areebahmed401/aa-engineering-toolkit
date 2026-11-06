@@ -3,7 +3,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { UnitSystem } from "./units";
 
 type Theme = "light" | "dark";
-type Prefs = { units: UnitSystem; setUnits: (u: UnitSystem) => void; theme: Theme; toggleTheme: () => void };
+type Prefs = { units: UnitSystem; setUnits: (u: UnitSystem) => void; theme: Theme; toggleTheme: () => void;
+  sidebarPinned: boolean; setSidebarPinned: (p: boolean) => void };
 
 const PrefsContext = createContext<Prefs | null>(null);
 
@@ -29,11 +30,18 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
 
+  const [sidebarPinned, setPinnedState] = useState<boolean>(() => stored<string>("aa-sidebar-pinned", "") === "1");
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
   const value: Prefs = {
+    sidebarPinned,
+    setSidebarPinned: (p) => {
+      setPinnedState(p);
+      save("aa-sidebar-pinned", p ? "1" : "");
+    },
     units,
     setUnits: (u) => {
       setUnitsState(u);
