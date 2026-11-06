@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  BEAM_TOOL, beamInputs, defaultState, determinacy, fbdLayout, fitSection, fromToolInputs, loadErrors, mergeState,
-  momentArc, SECTION_TOOL, sectionInputs, shapeMeta, stateDiff, stressAt, TORSION_TOOL, torsionError, torsionInputs,
-  type BeamValues, type FbdFormat,
+  addNode, addWall, BEAM_TOOL, beamInputs, cleanNoise, componentCount, declutter, defaultState, deleteNode, deleteWall, determinacy,
+  fbdLayout, fitSection, flowDirection, flowLabelCandidates, flowPoint, flowRegions, flowScale, fromToolInputs, hasWall, leftNormal,
+  loadErrors, makeView, maxAbs, mergeState, momentArc, moveNode, nextFreeWall, nodeNear, parseShearResult, SECTION_TOOL, sectionInputs,
+  seriesValues, shapeMeta, SHEAR_PRESETS, SHEAR_TOOL, shearError, shearInputs, shearPreset, snapPoint, snapTo, stateDiff, stressAt,
+  TORSION_TOOL, torsionError, torsionInputs, wallNear, wallStrokePx, type BeamValues, type FbdFormat, type ShearGeometry,
 } from "./structural";
 import type { ToolSchema } from "./types";
 
@@ -182,5 +184,178 @@ describe("stressAt", () => {
   });
   it("copes with empty input", () => {
     expect(stressAt(1, [], [], []).top).toBeNaN();
+  });
+});
+
+describe("shear flow: state and presets", () => {
+  const sectionDefaults = { shape: "i_beam", material: "Steel" };
+  const beamDefaults = { section: { shape: "i_beam" }, material: "Steel", ...beam() };
+  const defaults = defaultState(sectionDefaults, beamDefaults);
+
+  it("defaults to the Python channel and builds the tool inputs unchanged", () => {
+    expect(defaults.shear.nodes).toEqual([{ x2: 0.05, x3: 0 }, { x2: 0, x3: 0 }, { x2: 0, x3: 0.1 }, { x2: 0.05, x3: 0.1 }]);
+    expect(defaults.shear.walls).toEqual([{ i: 0, j: 1, h: 0.002, G: 81e9 }, { i: 1, j: 2, h: 0.002, G: 81e9 }, { i: 2, j: 3, h: 0.002, G: 81e9 }]);
+    expect(shearInputs(defaults)).toEqual(defaults.shear);
+    expect(defaults.shear).toMatchObject({ Q2: 0, Q3: 1000, Mt: 0, load_at_shear_centre: true });
+  });
+
+  it("round-trips shear changes through the share link and old tool links", () => {
+    const box = shearPreset("closed_box");
+    const changed = { ...defaults, shear: { ...defaults.shear, Q3: 500, load_at_shear_centre: false, a2: 0.02, walls: box.walls, nodes: box.nodes } };
+    const diff = stateDiff(changed, defaults);
+    expect(Object.keys(diff)).toEqual(["shear"]);
+    expect(Object.keys(diff.shear as object).sort()).toEqual(["Q3", "a2", "load_at_shear_centre", "nodes", "walls"]);
+    expect(mergeState(defaults, JSON.parse(JSON.stringify(diff)))).toEqual(changed);
+    expect(stateDiff(defaults, defaults)).toEqual({});
+    expect(fromToolInputs(SHEAR_TOOL, { Q3: 5 })).toEqual({ shear: { Q3: 5 } });
+    expect(fromToolInputs(SHEAR_TOOL, {})).toEqual({});
+  });
+
+  it("presets are valid sections of the right topology and size", () => {
+    for (const p of SHEAR_PRESETS) {
+      const g = shearPreset(p.id);
+      expect(shearError(g), p.id).toBeNull();
+      const cells = g.walls.length - g.nodes.length + 1;
+      expect(cells, p.id).toBe({ closed_box: 1, closed_tube: 1, two_cell_box: 2 }[p.id] ?? 0);
+      const xs = g.nodes.map((n) => n.x2);
+      const ys = g.nodes.map((n) => n.x3);
+      const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      expect(ext, p.id).toBeGreaterThanOrEqual(0.05);
+      expect(ext, p.id).toBeLessThanOrEqual(0.2);
+      expect(g.walls.every((w) => w.h === 0.002 && w.G === 81e9)).toBe(true);
+    }
+    expect(shearPreset("slit_tube").walls).toHaveLength(24);
+    expect(shearPreset("slit_tube").nodes).toHaveLength(25);
+    expect(shearPreset("closed_tube").walls).toHaveLength(24);
+  });
+});
+
+describe("shear flow: validation and editing", () => {
+  const g = (): ShearGeometry => shearPreset("channel");
+  const wall = (i: number, j: number, h = 0.002) => ({ i, j, h, G: 81e9 });
+
+  it("reports the problems the tool would reject", () => {
+    expect(shearError({ nodes: [{ x2: 0, x3: 0 }], walls: [] })).toMatch(/2 nodes/);
+    expect(shearError({ ...g(), walls: [] })).toMatch(/at least one wall/);
+    expect(shearError({ ...g(), walls: [wall(1, 1)] })).toMatch(/to itself/);
+    expect(shearError({ ...g(), walls: [wall(0, 1), wall(1, 0)] })).toMatch(/duplicates wall 0/);
+    expect(shearError({ ...g(), walls: [wall(0, 9)] })).toMatch(/out of range/);
+    expect(shearError({ ...g(), walls: [wall(0, 1, 0), wall(1, 2), wall(2, 3)] })).toMatch(/thickness/);
+    expect(shearError({ ...g(), walls: [wall(0, 1)] })).toMatch(/not connected/);
+    expect(shearError(g())).toBeNull();
+  });
+
+  it("counts connected components", () => {
+    expect(componentCount(4, [{ i: 0, j: 1 }, { i: 2, j: 3 }])).toBe(2);
+    expect(componentCount(4, [{ i: 0, j: 1 }, { i: 1, j: 2 }, { i: 3, j: 2 }])).toBe(1);
+  });
+
+  it("snaps, finds nodes and walls, and refuses duplicate walls", () => {
+    expect(snapTo(0.0123, 0.005)).toBe(0.01);
+    expect(snapTo(0.0126, 0.005)).toBe(0.015);
+    expect(snapPoint([0.0049, -0.0026], 0.005)).toEqual([0.005, -0.005]);
+    const geo = g();
+    expect(nodeNear(geo.nodes, [0.001, 0.001], 0.005)).toBe(1);
+    expect(nodeNear(geo.nodes, [0.03, 0.03], 0.005)).toBe(-1);
+    expect(wallNear(geo, [0, 0.05], 0.003)).toBe(1);
+    expect(wallNear(geo, [0.03, 0.05], 0.003)).toBe(-1);
+    expect(addWall(geo, 0, 1, 0.002)).toBe(geo);
+    expect(addWall(geo, 1, 0, 0.002)).toBe(geo);
+    expect(addWall(geo, 2, 2, 0.002)).toBe(geo);
+    expect(addWall(geo, 0, 3, 0.003).walls[3]).toEqual({ i: 0, j: 3, h: 0.003, G: 81e9 });
+    expect(hasWall(geo, 3, 2)).toBe(true);
+    expect(nextFreeWall(geo)).toEqual([0, 2]);
+    expect(nextFreeWall({ nodes: [{ x2: 0, x3: 0 }, { x2: 1, x3: 0 }], walls: [wall(0, 1)] })).toBeNull();
+  });
+
+  it("deleting a node removes its walls and reindexes the rest", () => {
+    const out = deleteNode(g(), 1);
+    expect(out.nodes).toHaveLength(3);
+    expect(out.walls).toEqual([wall(1, 2)]);
+    expect(deleteWall(g(), 0).walls.map((w) => w.i)).toEqual([1, 2]);
+    expect(addNode(g(), [0.1, 0.1]).index).toBe(4);
+    expect(moveNode(g(), 0, [0.01, 0.02]).nodes[0]).toEqual({ x2: 0.01, x3: 0.02 });
+  });
+});
+
+describe("shear flow: plot geometry", () => {
+  it("left normal follows the screen: a wall pointing right has its left side up (negative x3)", () => {
+    expect(leftNormal([0, 0], [1, 0])).toEqual([0, -1]);
+    const down = leftNormal([0, 0], [0, 2]);
+    expect(down[0]).toBeCloseTo(1);
+    expect(down[1]).toBeCloseTo(0);
+  });
+
+  it("scales the largest flow to 15 % of the extent", () => {
+    expect(flowScale(200, 0.1)).toBeCloseTo(0.015 / 200);
+    expect(flowScale(0, 0.1)).toBe(0);
+  });
+
+  it("offsets the flow curve by k·t along the normal and splits the fill at sign changes", () => {
+    const x2 = [0, 1, 2, 3, 4];
+    const x3 = [0, 0, 0, 0, 0];
+    const same = flowRegions(x2, x3, [0, 1, 2, 1, 0], 0.1);
+    expect(same).toHaveLength(1);
+    expect(same[0].positive).toBe(true);
+    expect(Math.min(...same[0].points.map((p) => p[1]))).toBeCloseTo(-0.2); // left of +x2 is up
+    const split = flowRegions(x2, x3, [-1, -1, 0, 1, 1], 0.1);
+    expect(split.map((r) => r.positive)).toEqual([false, true]);
+    expect(flowRegions(x2, x3, [1, 1, 1, 1, 1], 0)).toEqual([]);
+    expect(flowPoint(x2, x3, [0, 0, 2, 0, 0], 0.1, 2)).toEqual([2, -0.2]);
+    // a sign change between samples is split at the zero crossing
+    const cross = flowRegions([0, 2], [0, 0], [1, -1], 0.1);
+    expect(cross.map((r) => r.positive)).toEqual([true, false]);
+    expect(cross[0].points.some((p) => Math.abs(p[0] - 1) < 1e-12 && p[1] === 0)).toBe(true);
+  });
+
+  it("arrows follow the sign of t times the wall direction", () => {
+    expect(flowDirection([0, 0], [2, 0], 5)).toEqual([1, 0]);
+    expect(flowDirection([0, 0], [2, 0], -5)).toEqual([-1, 0]);
+    expect(flowDirection([0, 0], [0, 3], -1)[1]).toBe(-1);
+  });
+
+  it("labels the extreme and the ends, skipping values under 5 % of the maximum", () => {
+    const c = flowLabelCandidates([[0, 1, 2, 1, 0], [-100, -50, 1, 30, 100]], 100);
+    expect(c.map((x) => [x.wall, x.index, x.priority])).toEqual([[1, 0, 1], [1, 4, 1]]);
+    const w = flowLabelCandidates([[0, 40, 90, 40, 0]], 100);
+    expect(w.map((x) => [x.index, x.priority])).toEqual([[2, 0]]);
+  });
+
+  it("declutter keeps the first of any two labels that are too close", () => {
+    const kept = declutter([{ x: 0, y: 0, id: "a" }, { x: 10, y: 0, id: "b" }, { x: 50, y: 0, id: "c" }], 30);
+    expect(kept.map((k) => k.id)).toEqual(["a", "c"]);
+  });
+
+  it("view maps the points into the box and back, x3 pointing down", () => {
+    const view = makeView([[0, 0], [0.2, 0.1]], 400, 300, 20);
+    const [x, y] = view.toPx([0.1, 0.05]);
+    expect(x).toBeCloseTo(200);
+    expect(y).toBeCloseTo(150);
+    const [a, b] = view.toWorld(view.toPx([0.03, 0.07]));
+    expect(a).toBeCloseTo(0.03);
+    expect(b).toBeCloseTo(0.07);
+    expect(view.toPx([0.2, 0.1])[1]).toBeGreaterThan(view.toPx([0, 0])[1]);
+    expect(wallStrokePx(0.002, 1000)).toBe(1.5);
+    expect(wallStrokePx(0.002, 10000)).toBe(8);
+  });
+
+  it("cleans float noise and parses the tool result", () => {
+    expect(cleanNoise(1e-20, 1)).toBe(0);
+    expect(Object.is(cleanNoise(-0, 1), 0)).toBe(true);
+    expect(cleanNoise(3, 1)).toBe(3);
+    const wall = { wall: 0, i: 0, j: 1, h: 0.002, G: 81e9, length: 1, s: [0, 1], x2: [0, 1], x3: [0, 0],
+      t_cut: [0, 4], t0: [1, 1], t_torque: [0, 0], t_total: [1, 5], tau: [500, 2500] };
+    const r = parseShearResult([
+      { name: "walls", value: [wall] }, { name: "steps", value: [{ label: "J22", value: 2, unit: "m^4" }] },
+      { name: "A", value: 3 }, { name: "tau_torsion_open", value: null }, { name: "note", value: "x" }, { name: "cut_walls", value: [0] },
+    ])!;
+    expect(r.A).toBe(3);
+    expect(r.tau_torsion_open).toBeNaN();
+    expect(r.cut_walls).toEqual([0]);
+    expect(r.steps[0].unit).toBe("m^4");
+    expect(parseShearResult([{ name: "A", value: 1 }])).toBeNull();
+    expect(seriesValues(r.walls, "t_total", "t")).toEqual([[1, 5]]);
+    expect(seriesValues(r.walls, "t_total", "tau")).toEqual([[500, 2500]]);
+    expect(maxAbs(seriesValues(r.walls, "t_cut", "t"))).toBe(4);
   });
 });

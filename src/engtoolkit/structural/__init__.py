@@ -18,4 +18,5 @@ from .sections import (
     # original names
     C_beam, H_beam, Hollow_Circle, I_beam, L_beam, Rectangular_Tube, T_beam, Z_beam, beam, cross_section, plate, rod,
 )
+from .thin_walled import ShearFlowResult, shear_flow
 from .torsion import Torsion, max_torsional_shear, saint_venant_twist
