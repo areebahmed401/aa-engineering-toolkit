@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  addNode, addWall, alongWall, awayFrom, BEAM_TOOL, beamInputs, cleanNoise, clipLine, componentCount, declutter, defaultState, deleteNode, deleteWall, determinacy,
+  addNode, addWall, alphaHint, alongWall, awayFrom, BEAM_TOOL, beamInputs, cleanNoise, clipLine, componentCount, declutter, defaultState, deleteNode, deleteWall, determinacy, drawnCellCount,
   fbdLayout, fitSection, flowDirection, flowLabelCandidates, flowPoint, flowRegions, flowScale, fromToolInputs, hasWall, hatchLines, leftNormal,
-  loadErrors, makeView, maxAbs, mergeState, momentArc, moveNode, neutralAxis, nextFreeWall, nodeNear, outerNormal, parseShearResult, SECTION_TOOL, sectionInputs,
+  loadErrors, makeView, maxAbs, mergeState, momentArc, moveNode, neutralAxis, nextFreeWall, nodeNear, outerNormal, parseShearResult, parseTorsionResult, SECTION_TOOL, sectionInputs,
   seriesValues, shapeMeta, SHEAR_PRESETS, SHEAR_TOOL, shearError, shearInputs, shearPreset, snapPoint, snapTo, stateDiff, stressAt,
-  TORSION_TOOL, torsionError, torsionInputs, wallArrows, wallNear, wallStrokePx, wallThicknessPx, type BeamValues, type FbdFormat, type ShearGeometry,
+  TORSION_TOOL, torqueLoadErrors, torsionError, torsionInputs, wallArrows, wallNear, wallStrokePx, wallThicknessPx, type BeamValues, type FbdFormat, type ShearGeometry,
 } from "./structural";
 import type { ToolSchema } from "./types";
 
@@ -69,22 +69,60 @@ describe("state", () => {
   });
 
   it("keeps old section/beam URLs decoding the same and adds torsion defaults", () => {
-    expect(defaults.torsion).toEqual({ length: 1, torque: 200, position: 1 });
+    expect(defaults.torsion).toMatchObject({
+      length: 1, position: 1, mode: "restrained", section_source: "library", left_support: "fixed", right_support: "free",
+      loads: [{ x: 1, T: 200 }], m_t: 0,
+    });
     expect(mergeState(defaults, { section: { width: 0.2 }, beam: { length: 6 } })).toEqual({
       ...defaults, section: { ...defaults.section, width: 0.2 }, beam: { ...defaults.beam, length: 6 },
     });
   });
 
-  it("round-trips torsion values and builds torsion inputs", () => {
-    const changed = { ...defaults, material: "Aluminium 6061-T6", torsion: { length: 2, torque: 500, position: 1.5 } };
+  it("takes the default torque from the tool schema as a load at x = L", () => {
+    const custom = defaultState(sectionDefaults, beamDefaults, { section: {}, material: "Steel", length: 3, torque: 10, position: 3, loads: [] });
+    expect(custom.torsion.loads).toEqual([{ x: 3, T: 10 }]);
+    expect(custom.torsion.mode).toBe("restrained");
+  });
+
+  it("round-trips torsion values (loads always travel with a change) and builds torsion inputs", () => {
+    const changed = {
+      ...defaults, material: "Aluminium 6061-T6",
+      torsion: { ...defaults.torsion, length: 2, position: 1.5, mode: "free" as const, left_support: "fork" as const, right_support: "fork" as const, e3: 0.01 },
+    };
     const diff = stateDiff(changed, defaults);
-    expect(diff).toEqual({ material: "Aluminium 6061-T6", torsion: { length: 2, torque: 500, position: 1.5 } });
+    expect(diff).toEqual({
+      material: "Aluminium 6061-T6",
+      torsion: { length: 2, position: 1.5, mode: "free", left_support: "fork", right_support: "fork", e3: 0.01, loads: [{ x: 1, T: 200 }] },
+    });
     expect(mergeState(defaults, diff)).toEqual(changed);
     expect(torsionInputs(changed)).toEqual({
-      section: defaults.section, material: "Aluminium 6061-T6", length: 2, torque: 500, position: 1.5,
+      section: defaults.section, material: "Aluminium 6061-T6", length: 2, position: 1.5, mode: "free", section_source: "library",
+      left_support: "fork", right_support: "fork", loads: [{ x: 1, T: 200 }], m_t: 0, torque: 0, Q2: 0, Q3: 0, e2: 0, e3: 0.01,
     });
-    const custom = defaultState(sectionDefaults, beamDefaults, { section: {}, material: "Steel", length: 3, torque: 10, position: 3 });
-    expect(custom.torsion).toEqual({ length: 3, torque: 10, position: 3 });
+  });
+
+  it("sends the drawn section (and eta3) only when it is the source, the off-centre force only in free mode", () => {
+    const drawn = { ...defaults, torsion: { ...defaults.torsion, section_source: "drawn" as const, eta3: 1.2 } };
+    const inputs = torsionInputs(drawn);
+    expect(inputs).toMatchObject({ section_source: "drawn", eta3: 1.2, nodes: defaults.shear.nodes, walls: defaults.shear.walls });
+    expect(inputs).not.toHaveProperty("section");
+    expect(inputs).not.toHaveProperty("Q2");
+    const lib = torsionInputs(defaults);
+    expect(lib).not.toHaveProperty("nodes");
+    expect(lib).not.toHaveProperty("eta3");
+  });
+
+  it("migrates an old { length, torque, position } link to a fixed-free restrained cantilever", () => {
+    const merged = mergeState(defaults, { torsion: { length: 2, torque: 50, position: 1 } });
+    expect(merged.torsion).toEqual({
+      ...defaults.torsion, length: 2, position: 1, loads: [{ x: 2, T: 50 }], mode: "restrained", left_support: "fixed", right_support: "free",
+    });
+    expect(merged.torsion).not.toHaveProperty("torque");
+    // only the length changed: the old default torque of 200 N·m sits at the new tip
+    expect(mergeState(defaults, { torsion: { length: 3 } }).torsion.loads).toEqual([{ x: 3, T: 200 }]);
+    // new links carry loads, so they are not migrated
+    expect(mergeState(defaults, { torsion: { length: 3, loads: [{ x: 1, T: 5 }], mode: "free" } }).torsion)
+      .toMatchObject({ length: 3, loads: [{ x: 1, T: 5 }], mode: "free", left_support: "fixed" });
   });
 
   it("converts old torsion links", () => {
@@ -93,10 +131,41 @@ describe("state", () => {
     expect(fromToolInputs(TORSION_TOOL, {})).toEqual({});
   });
 
-  it("requires the torsion position to lie within the length", () => {
-    expect(torsionError({ length: 2, torque: 1, position: 2 })).toBeNull();
-    expect(torsionError({ length: 2, torque: 1, position: 2.5 })).toMatch(/within/);
-    expect(torsionError({ length: 0, torque: 1, position: 0 })).toMatch(/positive/);
+  it("checks position, supports and torque positions before calling Python", () => {
+    const t = defaults.torsion;
+    expect(torsionError(t)).toBeNull();
+    expect(torsionError({ ...t, length: 2, position: 2 })).toBeNull();
+    expect(torsionError({ ...t, length: 2, position: 2.5 })).toMatch(/within/);
+    expect(torsionError({ ...t, length: 0, position: 0 })).toMatch(/positive/);
+    expect(torsionError({ ...t, left_support: "free", right_support: "free" })).toMatch(/at least one end/i);
+    expect(torsionError({ ...t, left_support: "free", right_support: "fork" })).toBeNull();
+    expect(torsionError({ ...t, loads: [{ x: 0.5, T: 1 }, { x: 2, T: 1 }] })).toMatch(/Torque 2/);
+    expect(torqueLoadErrors({ ...t, loads: [{ x: -1, T: 1 }, { x: 1, T: 1 }] })).toEqual({ 0: "Position must be within the length" });
+    expect(torsionError({ ...t, section_source: "drawn" }, defaults.shear)).toBeNull();
+    expect(torsionError({ ...t, section_source: "drawn" }, { nodes: [], walls: [] })).toMatch(/^Drawn section/);
+    expect(torsionError(t, { nodes: [], walls: [] })).toBeNull(); // the drawn section only matters when it is the source
+  });
+
+  it("detects closed cells of a drawn section from the node/wall graph", () => {
+    expect(drawnCellCount(shearPreset("channel"))).toBe(0);
+    expect(drawnCellCount(shearPreset("closed_tube"))).toBe(1);
+    expect(drawnCellCount(shearPreset("two_cell_box"))).toBe(2);
+  });
+
+  it("reads the torsion result and words alpha", () => {
+    const r = parseTorsionResult([
+      { name: "twist", value: 0.01 }, { name: "alpha", value: null }, { name: "mode", value: "free" }, { name: "note", value: "n" },
+      { name: "steps", value: [{ label: "J_T", value: 1e-8, unit: "m^4" }, { label: "ω", value: null, unit: "m^2" }] },
+    ] as { name: string; value: unknown }[]);
+    expect(r.twist).toBe(0.01);
+    expect(r.alpha).toBeNaN();
+    expect(r).toMatchObject({ mode: "free", note: "n" });
+    expect(r.steps[0]).toEqual({ label: "J_T", value: 1e-8, unit: "m^4" });
+    expect(r.steps[1].value).toBeNaN();
+    expect(alphaHint(0.5)).toMatch(/warping/);
+    expect(alphaHint(20)).toMatch(/Saint-Venant/);
+    expect(alphaHint(3)).toMatch(/both/);
+    expect(alphaHint(NaN)).toBeNull();
   });
 
   it("reads shape fields from the schema hint", () => {

@@ -95,13 +95,72 @@ test("old torsion links open the torsion tab, which shows the section and a twis
   await expect(page.getByTestId("section-drawing")).toBeVisible();
   await expect(page.getByTestId("marker-centroid")).toBeVisible();
   await expect(page.getByTestId("result-twist_deg")).toContainText("°");
-  await expect(page.getByTestId("result-max_shear_stress")).toContainText("MPa");
+  await expect(page.getByTestId("result-tau_sv_max")).toContainText("MPa");
   await expect(page.locator('[data-testid="chart-twist"] .main-svg').first()).toBeVisible();
 
   // the evaluation point must lie on the member
   await page.getByTestId("field-position").fill("5000");
   await expect(page.getByTestId("torsion-error")).toBeVisible();
   await expect(page.getByTestId("calculate")).toBeDisabled();
+});
+
+test("torsion, restrained: fork-fork with a mid-span torque shows the torque split and alpha", async () => {
+  await page.goto("./#/"); // unmount so the previous test's inputs do not carry over
+  await page.goto("./#/structural?tab=torsion");
+  await expect(page.getByTestId("torsion-mode-restrained")).toHaveAttribute("aria-pressed", "true");
+  for (const side of ["left", "right"]) {
+    const select = page.getByTestId(`torsion-${side}-support`);
+    await select.scrollIntoViewIfNeeded();
+    await select.selectOption("fork");
+  }
+  const x = page.getByTestId("torsion-load-0-x");
+  await x.scrollIntoViewIfNeeded();
+  await x.fill("0.5");
+  await expect(page.getByTestId("torsion-beam")).toBeVisible();
+  await expect(page.getByTestId("torsion-support-left-fork")).toBeVisible();
+  await expect(page.getByTestId("torsion-load")).toHaveCount(1);
+  // symmetric fork-fork: T = +100 N·m just right of the left end
+  await expect(page.getByTestId("result-T_left")).toContainText("100");
+  await expect(page.getByTestId("result-alpha")).toBeVisible();
+  await expect(page.getByTestId("result-alpha-hint")).toBeVisible();
+  await expect(page.locator('[data-testid="chart-torque"] .main-svg').first()).toBeVisible();
+  await expect(page.locator('[data-testid="chart-bimoment"] .main-svg').first()).toBeVisible();
+
+  // both ends free is rejected before calling Python
+  await page.getByTestId("torsion-left-support").selectOption("free");
+  await page.getByTestId("torsion-right-support").selectOption("free");
+  await expect(page.getByTestId("torsion-error")).toContainText("At least one end");
+  await expect(page.getByTestId("calculate")).toBeDisabled();
+});
+
+test("torsion, free warping: a rectangle from tab 1 lists J_T in the formulary steps", async () => {
+  await page.goto("./#/");
+  await page.goto("./#/structural?tab=section");
+  const rect = page.getByTestId("shape-rectangle");
+  await rect.scrollIntoViewIfNeeded();
+  await rect.click();
+  await page.getByTestId("tab-torsion").click();
+  const free = page.getByTestId("torsion-mode-free");
+  await free.scrollIntoViewIfNeeded();
+  await free.click();
+  await expect(page.getByTestId("torsion-mode-hint")).toContainText("Free warping");
+  await expect(page.getByTestId("torsion-offcentre")).toBeVisible();
+  await expect(page.getByTestId("torsion-steps")).toContainText("J_T");
+  await expect(page.getByTestId("result-sigma_w_max")).toHaveCount(0); // no warping stresses when warping is free
+  await expect(page.getByTestId("run-error")).toHaveCount(0);
+});
+
+test("torsion with the section drawn in tab 5 (open channel) runs without error", async () => {
+  await page.goto("./#/");
+  await page.goto("./#/structural?tab=torsion");
+  const drawn = page.getByTestId("torsion-source-drawn");
+  await drawn.scrollIntoViewIfNeeded();
+  await drawn.click();
+  await expect(page.getByTestId("torsion-drawn-preview")).toBeVisible();
+  await expect(page.getByTestId("field-eta3")).toBeVisible(); // the default channel is open
+  await expect(page.getByTestId("torsion-steps")).toContainText("Shear centre"); // only the drawn section lists its pole
+  await expect(page.getByTestId("run-error")).toHaveCount(0);
+  await expect(page.getByTestId("torsion-error")).toHaveCount(0);
 });
 
 test("beam tab shows bending stress across the section; cantilever hogs (top in tension at the wall)", async () => {

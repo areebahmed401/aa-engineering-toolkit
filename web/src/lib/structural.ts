@@ -22,7 +22,17 @@ export type BeamValues = {
   theory: "EB" | "TB";
   n_elem: number;
 };
-export type TorsionValues = { length: number; torque: number; position: number };
+/** Torsion end condition: fixed holds twist and warping, fork holds twist only, free holds nothing. */
+export type TorsionSupport = "fixed" | "fork" | "free";
+export type TorsionMode = "free" | "restrained";
+export type TorsionSource = "library" | "drawn";
+/** Point torque T [N·m] about +x1 at x [m]. */
+export type TorqueLoad = { x: number; T: number };
+export type TorsionValues = {
+  length: number; position: number; mode: TorsionMode; section_source: TorsionSource; eta3: number;
+  left_support: TorsionSupport; right_support: TorsionSupport; loads: TorqueLoad[]; m_t: number;
+  Q2: number; Q3: number; e2: number; e3: number;
+};
 /** Thin-walled shear-flow tab: nodes (m, x3 pointing down) and walls i→j, plus the loads (SI). */
 export type ShearNode = { x2: number; x3: number };
 export type ShearWall = { i: number; j: number; h: number; G: number };
@@ -33,7 +43,41 @@ export type ShearValues = ShearGeometry & {
 /** Everything the page edits: the section and material are shared by the first three tabs. */
 export type StructuralState = { section: SectionValues; material: string; beam: BeamValues; torsion: TorsionValues; poles: PoleModel; shear: ShearValues };
 
-const TORSION_DEFAULTS: TorsionValues = { length: 1, torque: 200, position: 1 };
+const TORSION_DEFAULTS: TorsionValues = {
+  length: 1, position: 1, mode: "restrained", section_source: "library", eta3: 1, left_support: "fixed", right_support: "free",
+  loads: [{ x: 1, T: 200 }], m_t: 0, Q2: 0, Q3: 0, e2: 0, e3: 0,
+};
+export const TORSION_SUPPORTS: TorsionSupport[] = ["fixed", "fork", "free"];
+
+function normalizeLoads(v: unknown): TorqueLoad[] | null {
+  if (!Array.isArray(v)) return null;
+  return v.filter((l): l is TorqueLoad => !!l && typeof (l as TorqueLoad).x === "number" && typeof (l as TorqueLoad).T === "number")
+    .map((l) => ({ x: l.x, T: l.T }));
+}
+
+/** Torsion defaults from the tool schema; the default load is the schema's torque at x = L. */
+function torsionFromSchema(schema: Record<string, unknown>): TorsionValues {
+  const base = { ...TORSION_DEFAULTS } as Record<string, unknown>;
+  for (const k of Object.keys(TORSION_DEFAULTS)) if (k !== "loads" && schema[k] !== undefined) base[k] = schema[k];
+  const listed = normalizeLoads(schema.loads);
+  base.loads = listed && listed.length ? listed : [{ x: base.length as number, T: typeof schema.torque === "number" ? schema.torque : 200 }];
+  return base as unknown as TorsionValues;
+}
+
+/**
+ * Torsion state from a (possibly partial) decoded link. Old links carried { length, torque, position } for a cantilever
+ * under an end torque: they have no `loads`, so they become fixed–free, restrained, one torque at x = L.
+ */
+function mergeTorsion(defaults: TorsionValues, p: unknown): TorsionValues {
+  if (!p || typeof p !== "object") return defaults;
+  const t = p as Record<string, unknown>;
+  const known: Record<string, unknown> = {};
+  for (const k of Object.keys(defaults)) if (t[k] !== undefined) known[k] = t[k];
+  if ("loads" in t) return { ...defaults, ...known, loads: normalizeLoads(t.loads) ?? defaults.loads } as TorsionValues;
+  const length = typeof t.length === "number" ? t.length : defaults.length;
+  const torque = typeof t.torque === "number" ? t.torque : 200;
+  return { ...defaults, ...known, loads: [{ x: length, T: torque }], mode: "restrained", left_support: "fixed", right_support: "free" } as TorsionValues;
+}
 
 export const SUPPORTS: SupportKind[] = ["fixed", "pinned", "roller", "free"];
 export const LOAD_UNITS: Record<LoadKind, string> = { point: "N", udl: "N/m", moment: "N·m" };
@@ -66,8 +110,20 @@ export function beamInputs(s: StructuralState): Record<string, unknown> {
   return { section: s.section, material: s.material, ...s.beam };
 }
 
+/**
+ * Inputs of structural.torsion. Always sends `loads` (and torque 0, the tool's legacy fallback when the list is empty);
+ * the drawn section is sent only when it is the source, the off-shear-centre force only in free mode.
+ */
 export function torsionInputs(s: StructuralState): Record<string, unknown> {
-  return { section: s.section, material: s.material, ...s.torsion };
+  const { Q2, Q3, e2, e3, eta3, section_source, ...rest } = s.torsion;
+  const drawn = section_source === "drawn";
+  return {
+    ...(drawn ? {} : { section: s.section }),
+    material: s.material,
+    ...rest, torque: 0, section_source,
+    ...(drawn ? { nodes: s.shear.nodes, walls: s.shear.walls, eta3 } : {}),
+    ...(rest.mode === "free" ? { Q2, Q3, e2, e3 } : {}),
+  };
 }
 
 /** The pole-plan tab has its own model (no section or material). */
@@ -91,7 +147,7 @@ export function defaultState(
     section: { ...(section as SectionValues) },
     material: String(material ?? sectionDefaults.material ?? "Steel"),
     beam: beam as unknown as BeamValues,
-    torsion: { ...TORSION_DEFAULTS, ...torsion } as TorsionValues,
+    torsion: torsionFromSchema(torsion),
     poles,
     shear: defaultShear(),
   };
@@ -104,7 +160,7 @@ export function mergeState(defaults: StructuralState, partial: Record<string, un
     section: { ...defaults.section, ...(p.section ?? {}) },
     material: typeof p.material === "string" ? p.material : defaults.material,
     beam: { ...defaults.beam, ...(p.beam ?? {}) },
-    torsion: { ...defaults.torsion, ...(p.torsion ?? {}) },
+    torsion: mergeTorsion(defaults.torsion, p.torsion),
     poles: normalizeModel(p.poles) ?? defaults.poles,
     shear: { ...defaults.shear, ...(p.shear ?? {}) },
   };
@@ -124,7 +180,8 @@ export function stateDiff(state: StructuralState, defaults: StructuralState): Re
   if (state.material !== defaults.material) out.material = state.material;
   if (Object.keys(beam).length) out.beam = beam;
   const torsion = diff(state.torsion as unknown as Record<string, unknown>, defaults.torsion as unknown as Record<string, unknown>);
-  if (Object.keys(torsion).length) out.torsion = torsion;
+  // `loads` always travels with any torsion change: its absence marks an old { length, torque, position } link
+  if (Object.keys(torsion).length) out.torsion = { ...torsion, loads: state.torsion.loads };
   if (JSON.stringify(state.poles) !== JSON.stringify(defaults.poles)) out.poles = state.poles;
   const shear = diff(state.shear as unknown as Record<string, unknown>, defaults.shear as unknown as Record<string, unknown>);
   if (Object.keys(shear).length) out.shear = shear;
@@ -148,11 +205,65 @@ export function fromToolInputs(toolId: string, values: Record<string, unknown>):
   };
 }
 
-/** Torsion needs the evaluation point to lie on the member: returns an error message or null. */
-export function torsionError(t: TorsionValues): string | null {
+/** Messages per point torque whose position lies outside the member. */
+export function torqueLoadErrors(t: TorsionValues): Record<number, string> {
+  const out: Record<number, string> = {};
+  t.loads.forEach((l, i) => {
+    if (!(l.x >= 0) || l.x > t.length) out[i] = "Position must be within the length";
+  });
+  return out;
+}
+
+/** Closed cells of a drawn section (walls − nodes + connected parts); 0 means an open section. */
+export function drawnCellCount(g: ShearGeometry): number {
+  return Math.max(0, g.walls.length - g.nodes.length + componentCount(g.nodes.length, g.walls));
+}
+
+/** Client-side checks before calling structural.torsion (Python repeats them): returns an error message or null. */
+export function torsionError(t: TorsionValues, shear?: ShearGeometry): string | null {
   if (!(t.length > 0)) return "Length must be positive";
   if (!(t.position >= 0) || t.position > t.length) return "Position must be within the length";
+  if (t.left_support === "free" && t.right_support === "free") return "At least one end must be supported (fixed or fork)";
+  const bad = Object.keys(torqueLoadErrors(t))[0];
+  if (bad !== undefined) return `Torque ${Number(bad) + 1}: position must be within the length`;
+  if (t.section_source === "drawn" && shear) {
+    const e = shearError(shear);
+    if (e) return `Drawn section: ${e}`;
+  }
   return null;
+}
+
+// ---------------- torsion result ----------------
+
+export type TorsionResult = {
+  twist: number; twist_deg: number; twist_saint_venant: number; max_shear_stress: number; alpha: number;
+  saint_venant_share: number; mode: string; J_T: number; W_T: number; C_T: number; omega_max: number; mu: number;
+  twist_rate_sv: number; theta_max: number; x_theta_max: number; M_sv_max: number; M_b_max: number; B_max: number;
+  sigma_w_max: number; tau_sv_max: number; T_left: number; T_right: number; note: string; steps: ShearStep[];
+};
+
+/** Typed view of the structural.torsion result fields (null values, i.e. NaN from Python, become NaN). */
+export function parseTorsionResult(fields: { name: string; value: unknown }[]): TorsionResult {
+  const f = Object.fromEntries(fields.map((x) => [x.name, x.value]));
+  const n = (k: string) => numOr(f[k]);
+  const steps = (Array.isArray(f.steps) ? (f.steps as Record<string, unknown>[]) : []).map((s) => ({
+    label: String(s.label ?? ""), value: numOr(s.value), unit: String(s.unit ?? ""),
+  }));
+  return {
+    twist: n("twist"), twist_deg: n("twist_deg"), twist_saint_venant: n("twist_saint_venant"), max_shear_stress: n("max_shear_stress"),
+    alpha: n("alpha"), saint_venant_share: n("saint_venant_share"), mode: String(f.mode ?? ""), J_T: n("J_T"), W_T: n("W_T"), C_T: n("C_T"),
+    omega_max: n("omega_max"), mu: n("mu"), twist_rate_sv: n("twist_rate_sv"), theta_max: n("theta_max"), x_theta_max: n("x_theta_max"),
+    M_sv_max: n("M_sv_max"), M_b_max: n("M_b_max"), B_max: n("B_max"), sigma_w_max: n("sigma_w_max"), tau_sv_max: n("tau_sv_max"),
+    T_left: n("T_left"), T_right: n("T_right"), note: typeof f.note === "string" ? f.note : "", steps,
+  };
+}
+
+/** Plain-words reading of α = L √(G J_T / (E C_T)); null when α is not finite (C_T = 0). */
+export function alphaHint(alpha: number): string | null {
+  if (!Number.isFinite(alpha)) return null;
+  if (alpha < 1) return "α < 1: mostly warping torsion";
+  if (alpha > 10) return "α > 10: almost pure Saint-Venant torsion";
+  return "1 ≤ α ≤ 10: Saint-Venant and warping torsion both matter";
 }
 
 // ---------------- determinacy (mirrors structural.loads.static_determinacy) ----------------

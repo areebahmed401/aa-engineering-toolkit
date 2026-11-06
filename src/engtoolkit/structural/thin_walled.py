@@ -340,3 +340,70 @@ def _formulary_single_cell_x2_sc(points, h, G=None) -> float:
     e1 = float(np.sum(rho * (-int_S2 / J22)))
     A = 0.5 * np.sum(P[:, 0] * Q[:, 1] - Q[:, 0] * P[:, 1])
     return e1 + 2 * A / J22 * np.sum(int_S2 / (G * h)) / np.sum(l / (G * h))
+
+
+@dataclass
+class SectorialResult(Result):
+    C_T: float = rfield("m^6", "Warping constant C_T = ∫ω² h ds")
+    omega_max: float = rfield("m^2", "Max |ω| (principal sectorial coordinate)")
+    omega_max_wall: int = rfield("", "Wall of max |ω|")
+    omega_max_s: float = rfield("m", "Position s of max |ω| along that wall")
+    x2_SC: float = rfield("m", "Shear centre x2 (pole)")
+    x3_SC: float = rfield("m", "Shear centre x3 (pole)")
+    omega_nodes: list = rfield("m^2", "ω at each node", default_factory=list, summary=False)
+    walls: list = rfield("", "Per-wall samples: s, x2, x3, omega", default_factory=list, summary=False)
+
+
+def sectorial(nodes, walls, n_samples: int = 21) -> SectorialResult:
+    """
+    Principal sectorial coordinate ω(s) and warping constant C_T of an OPEN thin-walled section.
+
+    Formulary §3.2: pole at the shear centre P, dω = r_t ds with r_t the lever arm of the wall tangent about P
+    (dω = (x2 − x2P) dx3 − (x3 − x3P) dx2), normalised so ∫ω h ds = 0. With the pole at the shear centre
+    ∫ω x2 h ds = ∫ω x3 h ds = 0 as well. C_T = ∫ω² h ds along the mid-lines (ω is linear on each wall).
+    Inputs as for :func:`shear_flow`; raises ValueError for closed sections (n_cells ≥ 1).
+    """
+    P = np.asarray(nodes, dtype=float)
+    wt = _wall_tuples(walls)
+    _validate(P, wt)
+    N, W = len(P), len(wt)
+    if W - N + 1 != 0:
+        raise ValueError("sectorial() needs an open section (no closed cells)")
+    sc = shear_flow(P.tolist(), wt, Q2=0.0, Q3=0.0)
+    pole = np.array([sc.x2_SC, sc.x3_SC])
+    wi = [int(w[0]) for w in wt]
+    wj = [int(w[1]) for w in wt]
+    h = np.array([float(w[2]) for w in wt])
+    l = np.hypot(*(P[wj] - P[wi]).T)
+    # ω along the tree from node 0 (dω over wall i→j = (p_i − P) × (p_j − p_i))
+    d_omega = [float((P[i, 0] - pole[0]) * (P[j, 1] - P[i, 1]) - (P[i, 1] - pole[1]) * (P[j, 0] - P[i, 0]))
+               for i, j in zip(wi, wj)]
+    om = np.full(N, np.nan)
+    om[0] = 0.0
+    frontier = [0]
+    while frontier:
+        n = frontier.pop()
+        for w in range(W):
+            for a, b, sgn in ((wi[w], wj[w], 1.0), (wj[w], wi[w], -1.0)):
+                if a == n and np.isnan(om[b]):
+                    om[b] = om[a] + sgn * d_omega[w]
+                    frontier.append(b)
+    oa, ob = om[wi], om[wj]
+    A = float(np.sum(h * l))
+    om = om - float(np.sum(h * l * (oa + ob) / 2)) / A
+    oa, ob = om[wi], om[wj]
+    C_T = float(np.sum(h * l * (oa**2 + oa * ob + ob**2) / 3))
+    k = int(np.argmax(np.abs(om)))
+    om_max = float(abs(om[k]))
+    # the max of a linear ω is at a node; report the first wall touching it
+    w_max = next(w for w in range(W) if k in (wi[w], wj[w]))
+    s_max = 0.0 if wi[w_max] == k else float(l[w_max])
+    wall_data = []
+    for w in range(W):
+        s = np.linspace(0.0, l[w], n_samples)
+        e = (P[wj[w]] - P[wi[w]]) / l[w]
+        wall_data.append({"wall": w, "i": wi[w], "j": wj[w], "s": s.tolist(),
+                          "x2": (P[wi[w], 0] + e[0] * s).tolist(), "x3": (P[wi[w], 1] + e[1] * s).tolist(),
+                          "omega": (oa[w] + (ob[w] - oa[w]) * s / l[w]).tolist()})
+    return SectorialResult(C_T=C_T, omega_max=om_max, omega_max_wall=w_max, omega_max_s=s_max,
+                           x2_SC=float(pole[0]), x3_SC=float(pole[1]), omega_nodes=om.tolist(), walls=wall_data)
