@@ -1,8 +1,9 @@
-// Shear flow through a thin-walled section: the flow t(s) (or τ = t/h) is drawn as a band next to each wall
-// mid-line, offset along the wall's left normal, with flow arrows, value labels, S / SC markers and the load line.
+// Shear flow through a thin-walled section, textbook style: |t(s)| (or |τ| = |t/h|) is hatched on the outer side of each
+// wall, walls are drawn as outlines at their real thickness with flow-direction arrows inside, plus the neutral axis,
+// value labels, S / SC markers and the load line.
 import {
-  declutter, flowDirection, flowLabelCandidates, flowPoint, flowRegions, flowScale, leftNormal, makeView, maxAbs, polygonPath,
-  seriesValues, wallStrokePx, type FlowQuantity, type FlowSeries, type Point, type ShearResult,
+  awayFrom, clipLine, declutter, flowLabelCandidates, flowPoint, flowRegions, flowScale, hatchLines, makeView, maxAbs, neutralAxis,
+  outerNormal, polygonPath, seriesValues, wallArrows, wallThicknessPx, type FlowQuantity, type FlowSeries, type Point, type ShearResult,
 } from "../lib/structural";
 
 export type PlotLoad = { q2: number; q3: number; atSC: boolean; a2: number; a3: number };
@@ -23,9 +24,8 @@ type Props = {
   testId?: string;
 };
 
-// positive flow (along i→j) blue, negative orange: brand tokens, not hex
-const POS = "fill-structural/30 stroke-structural";
-const NEG = "fill-thermo/30 stroke-thermo";
+// one theme colour for the |t| diagram (the red "fail" token), no sign colours
+const DIAGRAM = "fill-fail stroke-fail";
 
 const HALO = { paintOrder: "stroke", stroke: "rgb(var(--surface))", strokeWidth: 3, strokeLinejoin: "round" } as const;
 
@@ -55,43 +55,88 @@ export function ShearFlowPlot({ result, series = "t_total", quantity, fmt, share
   const SC: Point = [result.x2_SC, result.x3_SC];
   const loadPt: Point | null = load && !compact ? (load.atSC ? SC : [load.a2, load.a3]) : null;
   const qLen = load ? Math.hypot(load.q2, load.q3) : 0;
-  const curves = walls.flatMap((w, wi) => w.x2.map((_, i) => flowPoint(w.x2, w.x3, values[wi], k, i)));
+  // |t| always on the outer side (away from S), so one normal per wall
+  const normals = walls.map((w) => {
+    const n = w.x2.length;
+    return outerNormal([w.x2[0], w.x3[0]], [w.x2[n - 1], w.x3[n - 1]], S, extent);
+  });
+
+  const curves = walls.flatMap((w, wi) => w.x2.map((_, i) => flowPoint(w.x2, w.x3, values[wi], k, i, normals[wi])));
   const fitPts = [...nodePts, ...curves, ...(compact ? [] : [S, SC]), ...(loadPt ? [loadPt] : [])];
   const view = makeView(fitPts, W, H, margin);
   const px = (p: Point) => view.toPx(p);
 
-  // flow bands
-  const bands = walls.flatMap((w, wi) =>
-    flowRegions(w.x2, w.x3, values[wi], k).map((r, ri) => (
-      <path key={`${wi}-${ri}`} d={polygonPath(r.points.map(px))} className={r.positive ? POS : NEG} strokeWidth={1} data-sign={r.positive ? "+" : "-"} />
+  // hatched |t| diagrams: thin outline (mid-line, curve, back) plus hatch lines perpendicular to the wall
+  const diagrams = walls.map((w, wi) => {
+    const len = Math.hypot(w.x2[w.x2.length - 1] - w.x2[0], w.x3[w.x3.length - 1] - w.x3[0]);
+    const hatch = hatchLines(w.x2, w.x3, values[wi], k, normals[wi], Math.max(0.04 * len, 0.02 * extent));
+    const regions = flowRegions(w.x2, w.x3, values[wi], k, normals[wi]);
+    if (!hatch.length && !regions.length) return null;
+    return (
+      <g key={wi} data-testid={`shear-hatch-${wi}`} className={DIAGRAM}>
+        {regions.map((r, ri) => (
+          <path key={ri} d={polygonPath(r.points.map(px))} fillOpacity={0.06} strokeWidth={1} data-sign={r.positive ? "+" : "-"} />
+        ))}
+        <path d={hatch.map(([a, b]) => `M${px(a)}L${px(b)}`).join("")} fill="none" strokeWidth={0.9} strokeOpacity={0.75} />
+      </g>
+    );
+  });
+
+  // walls: outline at real thickness (min on screen). An outline-coloured copy grown by 1 px sits under the surface-coloured
+  // copy, so touching walls merge into one outline. Free ends keep their cap; joined ends are extended by half the thickness.
+  const degree = new Map<number, number>();
+  for (const w of walls) for (const nd of [w.i, w.j]) degree.set(nd, (degree.get(nd) ?? 0) + 1);
+  const wallPolys = walls.map((w) => {
+    const n = w.x2.length;
+    const a = px([w.x2[0], w.x3[0]]);
+    const b = px([w.x2[n - 1], w.x3[n - 1]]);
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const e: Point = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+    const half = wallThicknessPx(w.h, view.s, compact ? 5 : 6) / 2;
+    const ea = (degree.get(w.i) ?? 1) > 1 ? half : 0;
+    const eb = (degree.get(w.j) ?? 1) > 1 ? half : 0;
+    const p0: Point = [a[0] - e[0] * ea, a[1] - e[1] * ea];
+    const p1: Point = [b[0] + e[0] * eb, b[1] + e[1] * eb];
+    const nrm: Point = [-e[1] * half, e[0] * half];
+    const points = `${p0[0] + nrm[0]},${p0[1] + nrm[1]} ${p1[0] + nrm[0]},${p1[1] + nrm[1]} ${p1[0] - nrm[0]},${p1[1] - nrm[1]} ${p0[0] - nrm[0]},${p0[1] - nrm[1]}`;
+    return { points, half };
+  });
+
+  // direction arrows on the walls (actual flow direction = sign of t × wall direction)
+  const arrows = walls.flatMap((w, wi) =>
+    wallArrows(w.x2, w.x3, values[wi], vMax).map((ar, ai) => (
+      <g key={`${wi}-${ai}`} data-testid="shear-arrow" data-wall={wi}>
+        <Arrow at={px(ar.at)} dir={ar.dir} size={Math.min(6.5, wallPolys[wi].half * 1.4)} />
+      </g>
     )),
   );
 
-  // direction arrows at the wall midpoints (actual flow direction = sign of t × wall direction)
-  const arrows = walls.map((w, wi) => {
-    const n = w.x2.length;
-    const m = Math.floor((n - 1) / 2);
-    const t = values[wi][m];
-    if (!(Math.abs(t) >= 0.05 * vMax) || !(vMax > 0)) return null;
-    const a: Point = [w.x2[0], w.x3[0]];
-    const b: Point = [w.x2[n - 1], w.x3[n - 1]];
-    const at = px(flowPoint(w.x2, w.x3, values[wi], k / 2, m));
-    return <Arrow key={wi} at={at} dir={flowDirection(a, b, t)} size={compact ? 4.5 : 6.5} />;
-  });
-
-  // value labels at the ends and at the extreme of each wall, de-cluttered
+  // value labels at the ends and at the extreme of each wall, on the outer side of the curve, de-cluttered
   const cands = flowLabelCandidates(values, vMax).map((c) => {
     const w = walls[c.wall];
-    const n = w.x2.length;
-    const nrm = leftNormal([w.x2[0], w.x3[0]], [w.x2[n - 1], w.x3[n - 1]]);
-    const [x, y] = px(flowPoint(w.x2, w.x3, values[c.wall], k, c.index));
-    const out = c.value >= 0 ? 1 : -1;
-    return { ...c, x: x + nrm[0] * out * 11, y: y + nrm[1] * out * 11 };
+    const nrm = normals[c.wall];
+    const [x, y] = px(flowPoint(w.x2, w.x3, values[c.wall], k, c.index, nrm));
+    return { ...c, x: x + nrm[0] * 11, y: y + nrm[1] * 11 };
   });
-  const labels = declutter(cands, compact ? 36 : 34);
+  const sPx = compact ? null : px(S);
+  const scPx = compact ? null : px(SC);
+  const labels = declutter(awayFrom(cands, [sPx, scPx].filter((p): p is Point => !!p), 16), compact ? 36 : 34);
 
-  const dots = new Map<string, Point>();
-  for (const p of nodePts) dots.set(`${p[0].toFixed(6)},${p[1].toFixed(6)}`, px(p));
+  // neutral axis through S (not in the compact step panels, and not without a shear force)
+  const naDir = !compact && load ? neutralAxis(result.J22, result.J33, result.J23, load.q2, load.q3) : null;
+  let naMark = null;
+  if (naDir) {
+    const [p0, p1] = clipLine(S, naDir, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], 0.08 * extent);
+    const a = px(p0);
+    const b = px(p1);
+    naMark = (
+      <g className="text-ink" data-testid="shear-na">
+        <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="currentColor" strokeWidth={1.2} strokeDasharray="7 4 1.5 4" />
+        <text x={b[0] + naDir[0] * 11} y={b[1] + naDir[1] * 11} fontSize={12} fontWeight={700} textAnchor="middle" dominantBaseline="middle"
+          className="fill-current" style={HALO}>NA</text>
+      </g>
+    );
+  }
 
   const cutMarks = cuts
     ? result.cut_walls.map((cw) => {
@@ -131,20 +176,17 @@ export function ShearFlowPlot({ result, series = "t_total", quantity, fmt, share
     );
   }
 
-  const s = compact ? null : px(S);
-  const c = compact ? null : px(SC);
+  const s = sPx;
+  const c = scPx;
   const same = s && c && Math.hypot(s[0] - c[0], s[1] - c[1]) < 3;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto h-auto w-full text-ink" style={{ maxWidth: W }} role="img"
       aria-label={title ?? "Shear flow through the section"} data-testid={testId}>
-      {bands}
-      {walls.map((w, wi) => {
-        const a = px([w.x2[0], w.x3[0]]);
-        const b = px([w.x2[w.x2.length - 1], w.x3[w.x3.length - 1]]);
-        return <line key={wi} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="currentColor" strokeOpacity={0.85} strokeWidth={wallStrokePx(w.h, view.s)} strokeLinecap="round" />;
-      })}
-      {[...dots.values()].map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.2} fill="rgb(var(--surface))" stroke="currentColor" strokeWidth={1} />)}
+      {diagrams}
+      {wallPolys.map((wp, wi) => <polygon key={`o${wi}`} points={wp.points} fill="currentColor" stroke="currentColor" strokeWidth={2} strokeLinejoin="miter" />)}
+      {wallPolys.map((wp, wi) => <polygon key={`f${wi}`} points={wp.points} fill="rgb(var(--surface))" data-testid={`shear-wall-${wi}`} />)}
+      {naMark}
       {cutMarks}
       {arrows}
       {labels.map((l) => (

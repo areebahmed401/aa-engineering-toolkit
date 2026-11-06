@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  addNode, addWall, BEAM_TOOL, beamInputs, cleanNoise, componentCount, declutter, defaultState, deleteNode, deleteWall, determinacy,
-  fbdLayout, fitSection, flowDirection, flowLabelCandidates, flowPoint, flowRegions, flowScale, fromToolInputs, hasWall, leftNormal,
-  loadErrors, makeView, maxAbs, mergeState, momentArc, moveNode, nextFreeWall, nodeNear, parseShearResult, SECTION_TOOL, sectionInputs,
+  addNode, addWall, alongWall, awayFrom, BEAM_TOOL, beamInputs, cleanNoise, clipLine, componentCount, declutter, defaultState, deleteNode, deleteWall, determinacy,
+  fbdLayout, fitSection, flowDirection, flowLabelCandidates, flowPoint, flowRegions, flowScale, fromToolInputs, hasWall, hatchLines, leftNormal,
+  loadErrors, makeView, maxAbs, mergeState, momentArc, moveNode, neutralAxis, nextFreeWall, nodeNear, outerNormal, parseShearResult, SECTION_TOOL, sectionInputs,
   seriesValues, shapeMeta, SHEAR_PRESETS, SHEAR_TOOL, shearError, shearInputs, shearPreset, snapPoint, snapTo, stateDiff, stressAt,
-  TORSION_TOOL, torsionError, torsionInputs, wallNear, wallStrokePx, type BeamValues, type FbdFormat, type ShearGeometry,
+  TORSION_TOOL, torsionError, torsionInputs, wallArrows, wallNear, wallStrokePx, wallThicknessPx, type BeamValues, type FbdFormat, type ShearGeometry,
 } from "./structural";
 import type { ToolSchema } from "./types";
 
@@ -291,27 +291,134 @@ describe("shear flow: plot geometry", () => {
     expect(flowScale(0, 0.1)).toBe(0);
   });
 
-  it("offsets the flow curve by k·t along the normal and splits the fill at sign changes", () => {
+  it("offsets the |t| curve by k·|t| along the given normal and splits the diagram at sign changes", () => {
     const x2 = [0, 1, 2, 3, 4];
     const x3 = [0, 0, 0, 0, 0];
-    const same = flowRegions(x2, x3, [0, 1, 2, 1, 0], 0.1);
+    const up: [number, number] = [0, -1];
+    const same = flowRegions(x2, x3, [0, 1, 2, 1, 0], 0.1, up);
     expect(same).toHaveLength(1);
     expect(same[0].positive).toBe(true);
-    expect(Math.min(...same[0].points.map((p) => p[1]))).toBeCloseTo(-0.2); // left of +x2 is up
-    const split = flowRegions(x2, x3, [-1, -1, 0, 1, 1], 0.1);
+    expect(Math.min(...same[0].points.map((p) => p[1]))).toBeCloseTo(-0.2);
+    // negative t is drawn on the same side (magnitude), only the sign flag differs
+    const neg = flowRegions(x2, x3, [0, -1, -2, -1, 0], 0.1, up);
+    expect(neg[0].positive).toBe(false);
+    expect(Math.min(...neg[0].points.map((p) => p[1]))).toBeCloseTo(-0.2);
+    expect(Math.max(...neg[0].points.map((p) => p[1]))).toBeCloseTo(0);
+    const split = flowRegions(x2, x3, [-1, -1, 0, 1, 1], 0.1, up);
     expect(split.map((r) => r.positive)).toEqual([false, true]);
-    expect(flowRegions(x2, x3, [1, 1, 1, 1, 1], 0)).toEqual([]);
-    expect(flowPoint(x2, x3, [0, 0, 2, 0, 0], 0.1, 2)).toEqual([2, -0.2]);
-    // a sign change between samples is split at the zero crossing
-    const cross = flowRegions([0, 2], [0, 0], [1, -1], 0.1);
-    expect(cross.map((r) => r.positive)).toEqual([true, false]);
-    expect(cross[0].points.some((p) => Math.abs(p[0] - 1) < 1e-12 && p[1] === 0)).toBe(true);
+    expect(flowRegions(x2, x3, [1, 1, 1, 1, 1], 0, up)).toEqual([]);
+    expect(flowPoint(x2, x3, [0, 0, -2, 0, 0], 0.1, 2, up)).toEqual([2, -0.2]);
   });
 
-  it("arrows follow the sign of t times the wall direction", () => {
+  it("butterfly: a wall where t changes sign gives two lobes on the same (outer) side", () => {
+    const down: [number, number] = [0, 1];
+    const cross = flowRegions([0, 2], [0, 0], [1, -1], 0.1, down);
+    expect(cross.map((r) => r.positive)).toEqual([true, false]);
+    expect(cross[0].points.some((p) => Math.abs(p[0] - 1) < 1e-12 && p[1] === 0)).toBe(true);
+    for (const r of cross) {
+      expect(Math.min(...r.points.map((p) => p[1]))).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...r.points.map((p) => p[1]))).toBeGreaterThan(0);
+    }
+  });
+
+  it("outer normal points away from the centroid, with the stated fallbacks for walls through S", () => {
+    // channel (open to the right), centroid right of the web, mid-height
+    const S: [number, number] = [0.0125, 0.05];
+    const web = outerNormal([0, 0], [0, 0.1], S, 0.1);
+    expect(web[0]).toBeCloseTo(-1); // diagram left of the web
+    expect(web[1]).toBeCloseTo(0);
+    const top = outerNormal([0.05, 0], [0, 0], S, 0.1); // drawn right to left: the left normal would point down
+    expect(top[1]).toBeCloseTo(-1); // above the top flange
+    const bottom = outerNormal([0, 0.1], [0.05, 0.1], S, 0.1);
+    expect(bottom[1]).toBeCloseTo(1); // below the bottom flange
+    // I-section web through S: right (whichever way it is drawn); horizontal wall through S: down
+    expect(outerNormal([0.05, 0], [0.05, 0.2], [0.05, 0.1], 0.2)[0]).toBeCloseTo(1);
+    expect(outerNormal([0.05, 0.2], [0.05, 0], [0.05, 0.1], 0.2)[0]).toBeCloseTo(1);
+    expect(outerNormal([0.1, 0.1], [0, 0.1], [0.05, 0.1], 0.2)[1]).toBeCloseTo(1);
+    expect(outerNormal([0, 0.1], [0.1, 0.1], [0.05, 0.1], 0.2)[1]).toBeCloseTo(1);
+    // closed box: all four walls outward whatever their drawing direction
+    const box = shearPreset("closed_box");
+    const c: [number, number] = [50, 30].map((v) => v / 1000) as [number, number];
+    const ps = box.nodes.map((n): [number, number] => [n.x2, n.x3]);
+    for (const w of box.walls) {
+      const a = ps[w.i];
+      const b = ps[w.j];
+      const n = outerNormal(a, b, c, 0.1);
+      expect(n[0] * ((a[0] + b[0]) / 2 - c[0]) + n[1] * ((a[1] + b[1]) / 2 - c[1])).toBeGreaterThan(0);
+    }
+  });
+
+  it("hatch lines are perpendicular to the wall, evenly spaced, at least six, and skip zero flow", () => {
+    const x2 = [0, 0.05, 0.1];
+    const x3 = [0, 0, 0];
+    const lines = hatchLines(x2, x3, [0, 2, 0], 0.01, [0, -1], 0.004);
+    expect(lines.length).toBeGreaterThanOrEqual(6);
+    const xsAt = lines.map((l) => l[0][0]);
+    const step = xsAt[2] - xsAt[1];
+    xsAt.slice(1).forEach((x, i) => expect(x - xsAt[i]).toBeCloseTo(step, 9));
+    for (const [a, b] of lines) {
+      expect(b[0]).toBeCloseTo(a[0]);
+      expect(b[1]).toBeLessThan(a[1]); // outer side is up
+    }
+    expect(hatchLines(x2, x3, [0, 0, 0], 0.01, [0, -1], 0.004)).toEqual([]);
+    expect(hatchLines(x2, x3, [1, 1, 1], 0, [0, -1], 0.004)).toEqual([]);
+    expect(hatchLines([0, 0.001], [0, 0], [1, 1], 0.01, [0, -1], 0.5)).toHaveLength(6); // short wall: still six
+  });
+
+  it("interpolates along a wall by arc length", () => {
+    const m = alongWall([0, 1, 3], [0, 0, 0], [0, 2, 6], 0.5);
+    expect(m.p[0]).toBeCloseTo(1.5);
+    expect(m.t).toBeCloseTo(3);
+    expect(alongWall([0, 4], [0, 0], [1, 3], 0).t).toBe(1);
+    expect(alongWall([0, 4], [0, 0], [1, 3], 1).p).toEqual([4, 0]);
+  });
+
+  it("arrows follow the sign of t times the wall direction, three per loaded wall", () => {
     expect(flowDirection([0, 0], [2, 0], 5)).toEqual([1, 0]);
     expect(flowDirection([0, 0], [2, 0], -5)).toEqual([-1, 0]);
     expect(flowDirection([0, 0], [0, 3], -1)[1]).toBe(-1);
+    const x2 = [0, 1, 2];
+    const x3 = [0, 0, 0];
+    const pos = wallArrows(x2, x3, [1, 1, 1], 1);
+    expect(pos.map((a) => a.at[0])).toEqual([0.5, 1, 1.5]);
+    expect(pos.every((a) => a.dir[0] === 1 && a.dir[1] === 0)).toBe(true);
+    const neg = wallArrows(x2, x3, [-1, -1, -1], 1);
+    expect(neg).toHaveLength(3);
+    expect(neg.every((a) => a.dir[0] === -1)).toBe(true);
+    // t changes sign along the wall: the arrows flip with it; the one at t = 0 is skipped
+    const mixed = wallArrows(x2, x3, [1, 0, -1], 1);
+    expect(mixed.map((a) => a.dir[0])).toEqual([1, -1]);
+    expect(wallArrows(x2, x3, [0, 0, 0], 1)).toEqual([]);
+    expect(wallArrows(x2, x3, [0.01, 0.01, 0.01], 1)).toEqual([]);
+  });
+
+  it("neutral axis: horizontal for vertical load, vertical for horizontal load, tilted for an unsymmetric section", () => {
+    // symmetric I-section (J23 = 0)
+    const v = neutralAxis(2e-5, 1e-6, 0, 0, 1000);
+    expect(v?.[0]).toBeCloseTo(1);
+    expect(v?.[1]).toBeCloseTo(0);
+    const h = neutralAxis(2e-5, 1e-6, 0, 500, 0);
+    expect(h?.[0]).toBeCloseTo(0);
+    expect(Math.abs(h?.[1] ?? 0)).toBeCloseTo(1);
+    expect(neutralAxis(2e-5, 1e-6, 0, 0, 0)).toBeNull();
+    // Z-section: J23 ≠ 0 tilts the axis away from the horizontal for a vertical load
+    const tilt = neutralAxis(2e-5, 1e-6, 4e-6, 0, 1000);
+    expect(tilt?.[0]).toBeGreaterThan(0);
+    expect(Math.abs(tilt?.[1] ?? 0)).toBeGreaterThan(0.05);
+    expect(Math.hypot(...(tilt as [number, number]))).toBeCloseTo(1);
+  });
+
+  it("clips a line to the section box, keeps labels off the markers and sets the wall thickness", () => {
+    const [a, b] = clipLine([0.05, 0.1], [1, 0], [0, 0, 0.1, 0.2], 0.01);
+    expect(a[0]).toBeCloseTo(-0.01);
+    expect(b[0]).toBeCloseTo(0.11);
+    const [c, d] = clipLine([0.05, 0.1], [0, 1], [0, 0, 0.1, 0.2], 0);
+    expect(c[1]).toBeCloseTo(0);
+    expect(d[1]).toBeCloseTo(0.2);
+    const kept = awayFrom([{ x: 0, y: 0 }, { x: 30, y: 0 }], [[2, 0]], 10);
+    expect(kept).toEqual([{ x: 30, y: 0 }]);
+    expect(wallThicknessPx(0.002, 1000)).toBe(6);
+    expect(wallThicknessPx(0.002, 10000)).toBe(20);
   });
 
   it("labels the extreme and the ends, skipping values under 5 % of the maximum", () => {

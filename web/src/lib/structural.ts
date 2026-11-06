@@ -605,6 +605,24 @@ export function leftNormal(a: Point, b: Point): Point {
   return [dy / l, -dx / l];
 }
 
+/** Drawn wall thickness (px): the real thickness at plot scale, but never thinner than `min` so 2 mm walls stay visible. */
+export function wallThicknessPx(h: number, scale: number, min = 6): number {
+  return Math.max(min, h * scale);
+}
+
+/**
+ * Unit normal of wall a→b that points away from the centroid S (sign of n·(mid − S)), so the |t| diagram is drawn outside.
+ * A wall through S has no outside: use the normal with positive x2 (right), or +x3 (down) for a horizontal wall.
+ */
+export function outerNormal(a: Point, b: Point, S: Point, extent: number): Point {
+  const n = leftNormal(a, b);
+  const flip: Point = [0 - n[0], 0 - n[1]]; // `0 -` keeps -0 out
+  const d = n[0] * ((a[0] + b[0]) / 2 - S[0]) + n[1] * ((a[1] + b[1]) / 2 - S[1]);
+  if (Math.abs(d) >= 1e-6 * extent) return d > 0 ? n : flip;
+  if (Math.abs(n[0]) > 1e-9) return n[0] > 0 ? n : flip;
+  return n[1] > 0 ? n : flip;
+}
+
 /** Offset (m per unit of t) so that the largest |t| reaches `frac` of the section's larger extent. */
 export function flowScale(tMax: number, extent: number, frac = 0.15): number {
   return tMax > 0 && extent > 0 ? (frac * extent) / tMax : 0;
@@ -613,17 +631,17 @@ export function flowScale(tMax: number, extent: number, frac = 0.15): number {
 export type FlowRegion = { positive: boolean; points: Point[] };
 
 /**
- * Polygons between a wall's mid-line and the flow curve (mid-line offset along the left normal by k·t),
- * split where t changes sign so each polygon has one colour.
+ * Polygons between a wall's mid-line and the |t| curve (mid-line offset along `normal` by k·|t|, so always on the
+ * side `normal` points to), split where t changes sign (a butterfly: two lobes on the same side).
  */
-export function flowRegions(x2: number[], x3: number[], t: number[], k: number): FlowRegion[] {
+export function flowRegions(x2: number[], x3: number[], t: number[], k: number, normal: Point): FlowRegion[] {
   const n = Math.min(x2.length, x3.length, t.length);
   if (n < 2 || !k) return [];
-  const [nx, ny] = leftNormal([x2[0], x3[0]], [x2[n - 1], x3[n - 1]]);
+  const [nx, ny] = normal;
   const eps = 1e-9 * Math.max(0, ...t.slice(0, n).map(Math.abs));
   const sign = (v: number) => (v > eps ? 1 : v < -eps ? -1 : 0);
   const base = (i: number): Point => [x2[i], x3[i]];
-  const off = (i: number): Point => [x2[i] + nx * k * t[i], x3[i] + ny * k * t[i]];
+  const off = (i: number): Point => [x2[i] + nx * k * Math.abs(t[i]), x3[i] + ny * k * Math.abs(t[i])];
   type Run = { positive: boolean; curve: Point[]; line: Point[] };
   const out: FlowRegion[] = [];
   const st: { cur: Run | null } = { cur: null };
@@ -664,11 +682,89 @@ export function flowRegions(x2: number[], x3: number[], t: number[], k: number):
   return out;
 }
 
-/** Point on the flow curve at sample i. */
-export function flowPoint(x2: number[], x3: number[], t: number[], k: number, i: number): Point {
-  const n = x2.length;
-  const [nx, ny] = leftNormal([x2[0], x3[0]], [x2[n - 1], x3[n - 1]]);
-  return [x2[i] + nx * k * t[i], x3[i] + ny * k * t[i]];
+/** Point on the |t| curve at sample i (offset along `normal`). */
+export function flowPoint(x2: number[], x3: number[], t: number[], k: number, i: number, normal: Point): Point {
+  return [x2[i] + normal[0] * k * Math.abs(t[i]), x3[i] + normal[1] * k * Math.abs(t[i])];
+}
+
+/** Point and linearly interpolated t at fraction f (0..1) of the wall's arc length. */
+export function alongWall(x2: number[], x3: number[], t: number[], f: number): { p: Point; t: number } {
+  const n = Math.min(x2.length, x3.length, t.length);
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(x2[i] - x2[i - 1], x3[i] - x3[i - 1]));
+  const target = Math.min(1, Math.max(0, f)) * cum[n - 1];
+  let i = 1;
+  while (i < n - 1 && cum[i] < target) i++;
+  const seg = cum[i] - cum[i - 1];
+  const u = seg > 0 ? (target - cum[i - 1]) / seg : 0;
+  return { p: [x2[i - 1] + u * (x2[i] - x2[i - 1]), x3[i - 1] + u * (x3[i] - x3[i - 1])], t: t[i - 1] + u * (t[i] - t[i - 1]) };
+}
+
+/**
+ * Hatch lines of the |t| diagram: from the mid-line to the curve, perpendicular to the wall, evenly spaced along the wall
+ * (about `spacing` apart, at least `minIntervals` + 1 lines). Zero-length lines (|t| ≈ 0) are skipped.
+ */
+export function hatchLines(x2: number[], x3: number[], t: number[], k: number, normal: Point, spacing: number, minIntervals = 5): [Point, Point][] {
+  const n = Math.min(x2.length, x3.length, t.length);
+  if (n < 2 || !k) return [];
+  const len = Math.hypot(x2[n - 1] - x2[0], x3[n - 1] - x3[0]);
+  if (!(len > 0)) return [];
+  const count = Math.max(minIntervals, Math.round(len / Math.max(spacing, 1e-12)));
+  const out: [Point, Point][] = [];
+  for (let m = 0; m <= count; m++) {
+    const { p, t: tv } = alongWall(x2, x3, t, m / count);
+    const d = k * Math.abs(tv);
+    if (d < 1e-3 * len) continue;
+    out.push([p, [p[0] + normal[0] * d, p[1] + normal[1] * d]]);
+  }
+  return out;
+}
+
+export type FlowArrow = { at: Point; dir: Point };
+
+/** Direction arrows on the mid-line at the given fractions of the wall; none where |t| < minFrac·vMax. */
+export function wallArrows(x2: number[], x3: number[], t: number[], vMax: number, fracs = [0.25, 0.5, 0.75], minFrac = 0.02): FlowArrow[] {
+  const n = Math.min(x2.length, x3.length, t.length);
+  if (n < 2 || !(vMax > 0)) return [];
+  const a: Point = [x2[0], x3[0]];
+  const b: Point = [x2[n - 1], x3[n - 1]];
+  const out: FlowArrow[] = [];
+  for (const f of fracs) {
+    const { p, t: tv } = alongWall(x2, x3, t, f);
+    if (Math.abs(tv) >= minFrac * vMax) out.push({ at: p, dir: flowDirection(a, b, tv) });
+  }
+  return out;
+}
+
+/**
+ * Direction (unit, x2 right / x3 down, pointing right or else down) of the neutral axis through S for shear forces Q2, Q3.
+ * The accompanying bending is M2 = Q3, M3 = −Q2 (per unit length), and σ ∝ (M2 J33 + M3 J23) x3 − (M3 J22 + M2 J23) x2 = 0.
+ * Null without a shear force.
+ */
+export function neutralAxis(J22: number, J33: number, J23: number, Q2: number, Q3: number): Point | null {
+  const a = Q3 * J33 - Q2 * J23;
+  const b = Q3 * J23 - Q2 * J22;
+  const l = Math.hypot(a, b);
+  if (!(l > 0) || !Number.isFinite(l)) return null;
+  const flip = a < -1e-9 * l || (Math.abs(a) <= 1e-9 * l && b < 0) ? -1 : 1;
+  return [(flip * a) / l || 0, (flip * b) / l || 0];
+}
+
+/** End points of the line through `c` along `dir`, clipped to the box [minX, minY, maxX, maxY] grown by `pad`. */
+export function clipLine(c: Point, dir: Point, box: [number, number, number, number], pad: number): [Point, Point] {
+  const lo = [box[0] - pad, box[1] - pad];
+  const hi = [box[2] + pad, box[3] + pad];
+  let tMin = -Infinity;
+  let tMax = Infinity;
+  for (let ax = 0; ax < 2; ax++) {
+    if (Math.abs(dir[ax]) < 1e-12) continue;
+    const t1 = (lo[ax] - c[ax]) / dir[ax];
+    const t2 = (hi[ax] - c[ax]) / dir[ax];
+    tMin = Math.max(tMin, Math.min(t1, t2));
+    tMax = Math.min(tMax, Math.max(t1, t2));
+  }
+  if (!Number.isFinite(tMin) || !Number.isFinite(tMax) || tMin > tMax) return [c, c];
+  return [[c[0] + dir[0] * tMin, c[1] + dir[1] * tMin], [c[0] + dir[0] * tMax, c[1] + dir[1] * tMax]];
 }
 
 /** Flow direction (unit, screen frame) = wall direction i→j times the sign of t. */
@@ -705,6 +801,11 @@ export function declutter<T extends { x: number; y: number }>(items: T[], minDis
   const kept: T[] = [];
   for (const it of items) if (kept.every((k) => Math.hypot(k.x - it.x, k.y - it.y) >= minDist)) kept.push(it);
   return kept;
+}
+
+/** Items at least `minDist` away from every point in `pts`. */
+export function awayFrom<T extends { x: number; y: number }>(items: T[], pts: Point[], minDist: number): T[] {
+  return items.filter((it) => pts.every((p) => Math.hypot(p[0] - it.x, p[1] - it.y) >= minDist));
 }
 
 /** Float noise (about 1e-20, -0) shown as 0. */
