@@ -123,13 +123,17 @@ export function ShearFlowTab({ state, update, response, units }: {
                 ? <StepsPanels result={result} quantity={quantity} fmt={fmt} />
                 : <ShearFlowPlot result={result} quantity={quantity} fmt={fmt} load={load} title="Shear flow through the section" />}
               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted">
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-structural bg-structural/40" /> positive (along i → j)</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-thermo bg-thermo/40" /> negative</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm border border-fail" style={{ background: "repeating-linear-gradient(90deg, rgb(var(--fail)) 0 1px, transparent 1px 3px)" }} />
+                  Hatched: {quantity === "t" ? "|t|" : "|τ|"} drawn outside each wall
+                </span>
+                <span>· arrows: flow direction</span>
+                <span>· NA: neutral axis</span>
                 <span>values in {plotConv.unit}</span>
                 <span className="inline-flex items-center gap-1"><span className="font-mono text-ink">⊕</span> S centroid</span>
                 <span className="inline-flex items-center gap-1"><span className="text-thermo">◆</span> SC shear centre</span>
               </div>
-              <p className="text-center text-xs text-muted">Band width is proportional to {quantity === "t" ? "|t|" : "|τ|"}; arrows show the flow direction. Wall thickness is not to scale.</p>
+              <p className="text-center text-xs text-muted">Hatch length is proportional to {quantity === "t" ? "|t|" : "|τ|"}. Walls are drawn at their real thickness, at least 6 px.</p>
             </div>
           )}
         </Card>

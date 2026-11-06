@@ -139,6 +139,24 @@ test("shear flow tab: channel plot, shear centre and steps; canvas editing; clos
   await expect(page.getByTestId("result-sc")).toContainText("-18.75 mm"); // e = 3 b² / (h + 6 b) behind the web
   await expect(page.getByTestId("run-error")).toHaveCount(0);
 
+  // textbook style: |t| hatched on the outer side of each wall, three arrows per loaded wall, horizontal NA through S
+  const plot = page.getByTestId("shear-plot");
+  await plot.scrollIntoViewIfNeeded();
+  const bb = async (id: string) => (await plot.getByTestId(id).boundingBox())!;
+  const [web, webHatch, top, topHatch, bottom, bottomHatch] = [await bb("shear-wall-1"), await bb("shear-hatch-1"), await bb("shear-wall-0"),
+    await bb("shear-hatch-0"), await bb("shear-wall-2"), await bb("shear-hatch-2")];
+  expect(webHatch.x).toBeLessThan(web.x - 5); // web diagram left of the web (outside the channel)
+  expect(webHatch.x + webHatch.width).toBeLessThan(web.x + web.width + 1);
+  expect(topHatch.y).toBeLessThan(top.y - 2); // top flange diagram above it
+  expect(bottomHatch.y + bottomHatch.height).toBeGreaterThan(bottom.y + bottom.height + 2); // bottom flange diagram below it
+  await expect(plot.getByTestId("shear-arrow")).toHaveCount(9);
+  const na = plot.getByTestId("shear-na");
+  await expect(na).toHaveCount(1);
+  const naBox = (await na.locator("line").boundingBox())!;
+  expect(naBox.height).toBeLessThan(2); // horizontal
+  const sBox = (await plot.getByTestId("shear-centroid").locator("circle").boundingBox())!;
+  expect(Math.abs(naBox.y - (sBox.y + sBox.height / 2))).toBeLessThan(2); // through S
+
   // canvas: add a wall from node 2 to a new grid point on its left
   await page.getByTestId("shear-mode-wall").click();
   await page.getByTestId("shear-node-2").scrollIntoViewIfNeeded(); // mouse clicks need the node inside the viewport
