@@ -20,6 +20,7 @@ from .sections import (
     Beam, CBeam, Circle, CrossSection, HollowCircle, IBeam, LBeam, Rectangle, RectangularTube, SectionProperties,
     TBeam, ZBeam,
 )
+from .thin_walled import ShearFlowResult, shear_flow
 from .torsion import Torsion, saint_venant_twist
 
 ShapeName = Literal["rectangle", "square_tube", "rectangular_tube", "circle", "hollow_circle",
@@ -192,3 +193,45 @@ def torsion_tool(inp: TorsionInputs) -> TorsionResult:
                tags=("kinematics", "pole plan", "mechanism", "stability"), custom_page=True)
 def pole_plan_tool(inp: PolePlanInputs) -> PolePlanResult:
     return analyze_pole_plan(inp)
+
+
+# ---------------- thin-walled shear flow ----------------
+
+class NodeInput(BaseModel):
+    x2: float = Input(0.0, "m", "x2 (horizontal, right +)")
+    x3: float = Input(0.0, "m", "x3 (vertical, down +)")
+
+
+class WallInput(BaseModel):
+    i: int = Input(0, "", "Start node i (s runs i → j)", ge=0)
+    j: int = Input(1, "", "End node j", ge=0)
+    h: float = Input(0.002, "m", "Wall thickness h", gt=0)
+    G: float = Input(81e9, "Pa", "Shear modulus G", gt=0)
+
+
+def _channel_nodes() -> list[NodeInput]:
+    # Channel: 100 mm web, 50 mm flanges opening to +x2 (x3 points down)
+    return [NodeInput(x2=0.05, x3=0.0), NodeInput(x2=0.0, x3=0.0), NodeInput(x2=0.0, x3=0.1),
+            NodeInput(x2=0.05, x3=0.1)]
+
+
+class ShearFlowInputs(BaseModel):
+    nodes: list[NodeInput] = Field(default_factory=_channel_nodes)
+    walls: list[WallInput] = Field(default_factory=lambda: [WallInput(i=0, j=1), WallInput(i=1, j=2),
+                                                            WallInput(i=2, j=3)])
+    Q2: float = Input(0.0, "N", "Shear force Q2 (+x2)")
+    Q3: float = Input(1000.0, "N", "Shear force Q3 (+x3, down)")
+    load_at_shear_centre: bool = Input(True, "", "Load acts through the shear centre")
+    a2: float = Input(0.0, "m", "Load line x2 (if not through the shear centre)")
+    a3: float = Input(0.0, "m", "Load line x3 (if not through the shear centre)")
+    Mt: float = Input(0.0, "N·m", "Torque M_t (about +x1, from x2 towards x3)")
+
+
+@register_tool("structural.shear_flow", "Shear flow (thin-walled)", ShearFlowInputs,
+               description="Shear flow t(s) and shear centre of open, branched, closed and multi-cell thin-walled sections.",
+               reference="RWTH OLS formulary §2: t' = −Q3 S2/J22 (cut open), t0 from ϑ' = 0, Bredt M_t = 2 A t",
+               tags=("section", "shear flow", "shear centre", "thin-walled"), custom_page=True)
+def shear_flow_tool(inp: ShearFlowInputs) -> ShearFlowResult:
+    return shear_flow([(n.x2, n.x3) for n in inp.nodes], [(w.i, w.j, w.h, w.G) for w in inp.walls],
+                      Q2=inp.Q2, Q3=inp.Q3, Mt=inp.Mt,
+                      load_point=None if inp.load_at_shear_centre else (inp.a2, inp.a3))

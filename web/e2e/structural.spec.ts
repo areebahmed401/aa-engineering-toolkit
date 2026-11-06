@@ -126,3 +126,59 @@ test("beam tab shows bending stress across the section; cantilever hogs (top in 
   await slider.fill(String(await slider.getAttribute("max")));
   await expect(page.getByTestId("stress-top-value")).not.toHaveText(atWall);
 });
+
+test("shear flow tab: channel plot, shear centre and steps; canvas editing; closed box steps view; link round-trips", async () => {
+  await page.goto("./#/"); // unmount the page so earlier tests' inputs do not carry over
+  await page.goto("./#/structural?tab=shear");
+  await expect(page.getByTestId("tab-shear")).toHaveAttribute("aria-selected", "true");
+
+  // default channel: plot, markers and the formulary steps
+  await expect(page.getByTestId("shear-plot")).toBeVisible();
+  await expect(page.getByTestId("shear-sc")).toBeVisible();
+  await expect(page.getByTestId("shear-steps")).toContainText("J22");
+  await expect(page.getByTestId("result-sc")).toContainText("-18.75 mm"); // e = 3 b² / (h + 6 b) behind the web
+  await expect(page.getByTestId("run-error")).toHaveCount(0);
+
+  // canvas: add a wall from node 2 to a new grid point on its left
+  await page.getByTestId("shear-mode-wall").click();
+  await page.getByTestId("shear-node-2").scrollIntoViewIfNeeded(); // mouse clicks need the node inside the viewport
+  const box = await page.getByTestId("shear-node-2").locator("circle").boundingBox();
+  const cx = box!.x + box!.width / 2;
+  const cy = box!.y + box!.height / 2;
+  await page.mouse.click(cx, cy);
+  await page.mouse.click(cx - 60, cy);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("shear-nodes-table").locator("tbody tr")).toHaveCount(5);
+  await expect(page.getByTestId("shear-walls-table").locator("tbody tr")).toHaveCount(4);
+  await expect(page.getByTestId("shear-error")).toHaveCount(0);
+
+  // table: delete the node again, which removes its wall
+  await page.getByRole("button", { name: "Delete node 4" }).click();
+  await expect(page.getByTestId("shear-nodes-table").locator("tbody tr")).toHaveCount(4);
+  await expect(page.getByTestId("shear-walls-table").locator("tbody tr")).toHaveCount(3);
+
+  // a disconnected section is flagged before the tool is called
+  await page.getByRole("button", { name: "Delete wall 1" }).click();
+  await expect(page.getByTestId("shear-error")).toContainText("not connected");
+  await expect(page.getByTestId("calculate")).toBeDisabled();
+
+  // preset: closed box, one cell, steps view with t' + t0 = t
+  await page.getByTestId("shear-preset").selectOption("closed_box");
+  await expect(page.getByTestId("shear-error")).toHaveCount(0);
+  await expect(page.getByTestId("result-cells")).toContainText("1");
+  await page.getByTestId("shear-view-steps").click();
+  await expect(page.getByTestId("shear-steps-panels")).toBeVisible();
+  await expect(page.getByTestId("shear-plot-t_cut")).toBeVisible();
+  await expect(page.getByTestId("shear-plot-t0")).toBeVisible();
+  await expect(page.getByTestId("shear-plot-t_total")).toBeVisible();
+  await expect(page.getByTestId("shear-cut").first()).toBeVisible();
+  await expect(page.getByTestId("shear-steps")).toContainText("t0 cell 0");
+
+  // the link reproduces the section
+  await expect(page).toHaveURL(/i=/);
+  const url = page.url();
+  await page.goto("./#/");
+  await page.goto(url);
+  await expect(page.getByTestId("shear-walls-table").locator("tbody tr")).toHaveCount(4);
+  await expect(page.getByTestId("result-cells")).toContainText("1");
+});

@@ -141,3 +141,12 @@ def test_tool_chart_ids():
     inp = tors.parse({})
     assert "section" in [c.id for c in tors.make_charts(inp, tors.func(inp))]
     assert tors.schema()["custom_page"] is True
+
+
+def test_tool_shear_flow():
+    # default channel: 50 mm flanges, 100 mm web, SC at 3b²/(6b + d) behind the web
+    r = run("structural.shear_flow", {})
+    assert r.x2_SC == pytest.approx(-3 * 0.05**2 / (6 * 0.05 + 0.1), rel=1e-6)
+    assert r.n_cells == 0 and len(r.walls) == 3
+    with pytest.raises(ValueError):
+        run("structural.shear_flow", {"walls": [{"i": 0, "j": 9, "h": 0.002}]})
