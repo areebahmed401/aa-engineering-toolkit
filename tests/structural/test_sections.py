@@ -6,6 +6,7 @@ import pytest
 from engtoolkit.structural import (
     Beam, CBeam, Circle, HollowCircle, IBeam, LBeam, Rectangle, RectangularTube, TBeam, ZBeam, I_beam, beam,
 )
+from engtoolkit.structural.sections import Ellipse
 
 
 def test_rectangle_properties():
@@ -78,16 +79,21 @@ def test_equal_angle_centroid():
 
 
 def test_rectangular_tube_bredt():
+    # Thick-walled hollow rectangle (formulary §3.1): J_T = J_TB (Bredt on the mid-line box) + the four walls as
+    # solid rectangles; the wall terms add ~1 % here, so the old pure-Bredt check now applies to J_TB
     s = RectangularTube(0.03, 0.05, 0.003)
     Am = 0.027 * 0.047
     assert s.A_enclosed == pytest.approx(Am)
-    assert s.J_torsion == pytest.approx(4 * Am**2 * 0.003 / (2 * (0.027 + 0.047)))
+    split = s.thick_wall_torsion()
+    assert split["J_TB"] == pytest.approx(4 * Am**2 * 0.003 / (2 * (0.027 + 0.047)))
+    assert s.J_torsion == pytest.approx(split["J_TB"] + sum(split["J_walls"]))
+    assert s.J_torsion == pytest.approx(split["J_TB"], rel=0.02)
 
 
 @pytest.mark.parametrize("section", [
     Rectangle(0.1, 0.2), Circle(0.05), HollowCircle(0.05, 0.04), RectangularTube(0.1, 0.15, 0.005),
     IBeam(0.1, 0.008, 0.2, 0.005), TBeam(0.1, 0.01, 0.1, 0.008), CBeam(0.05, 0.006, 0.1, 0.005),
-    ZBeam(0.05, 0.006, 0.1, 0.005), LBeam(0.08, 0.008),
+    ZBeam(0.05, 0.006, 0.1, 0.005), LBeam(0.08, 0.008), Ellipse(0.05, 0.03),
 ])
 def test_outline_area_matches_section_area(section):
     """Shoelace area of the outline (minus holes) equals the section area."""

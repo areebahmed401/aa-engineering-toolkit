@@ -46,7 +46,7 @@ def test_tool_torsion():
 DIMENSIONS = ("width", "height", "thickness", "web_thickness", "radius", "inner_radius", "profile")
 
 
-@pytest.mark.parametrize("shape", ["rectangle", "square_tube", "rectangular_tube", "circle", "hollow_circle",
+@pytest.mark.parametrize("shape", ["rectangle", "square_tube", "rectangular_tube", "circle", "ellipse", "hollow_circle",
                                    "i_beam", "c_beam", "t_beam", "z_beam", "l_beam", "profile"])
 def test_shape_fields_match_build_section(shape):
     # The web app shows only SHAPE_FIELDS[shape]: those inputs must change the section, the others must not
@@ -139,7 +139,9 @@ def test_tool_chart_ids():
     assert "section" in ids and "bending_stress" in ids
     tors = get_tool("structural.torsion")
     inp = tors.parse({})
-    assert "section" in [c.id for c in tors.make_charts(inp, tors.func(inp))]
+    assert [c.id for c in tors.make_charts(inp, tors.func(inp))] == ["twist", "torque", "bimoment", "section"]
+    inp = tors.parse({"mode": "free", "section_source": "drawn"})
+    assert [c.id for c in tors.make_charts(inp, tors.func(inp))] == ["twist", "torque", "section"]
     assert tors.schema()["custom_page"] is True
 
 

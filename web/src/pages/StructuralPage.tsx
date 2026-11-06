@@ -1,4 +1,4 @@
-// Dedicated structural page: section designer + beam builder with a live free-body diagram + torsion of a cantilever
+// Dedicated structural page: section designer + beam builder with a live free-body diagram + torsion (free / restrained warping)
 // + pole plan (kinematic movability) of a drawn planar system + shear flow of thin-walled sections.
 // All numbers come from the Python tools structural.section_properties, structural.beam_analysis, structural.torsion,
 // structural.pole_plan and structural.shear_flow.
@@ -13,6 +13,7 @@ import { PolePlanPanel } from "../components/PolePlanPanel";
 import { SectionDrawing } from "../components/SectionDrawing";
 import { StressSection } from "../components/StressSection";
 import { ShearFlowTab } from "./ShearFlowTab";
+import { TorsionTab } from "./TorsionTab";
 import { Card, ErrorBox, smallLength, stressConv, unitConv } from "./structuralShared";
 import { cn, SECTION_META, Spinner } from "../components/ui";
 import { useEngine } from "../lib/engine";
@@ -130,7 +131,7 @@ export function StructuralPage() {
       return determinacy(state.beam.left_support, state.beam.right_support).status === "mechanism"
         || Object.keys(loadErrors(state.beam)).length > 0 || !(state.beam.length > 0);
     }
-    if (tab === "torsion") return torsionError(state.torsion) !== null;
+    if (tab === "torsion") return torsionError(state.torsion, state.shear) !== null;
     if (tab === "poles") return !hasMembers(state.poles);
     if (tab === "shear") return shearError(state.shear) !== null;
     return false;
@@ -182,7 +183,10 @@ export function StructuralPage() {
   const exportReport = () => {
     if (!response?.ok) return;
     const fields = tab === "section" ? sectionFields : tab === "beam" ? beamFields : tab === "torsion" ? torsionFields : tab === "poles" ? poleFields : shearFields;
-    const base = markdownReport({ tool, fields, values: inputsFor(tab, state), results: response.result.fields, system: units, version: schema.version, link: link() });
+    const values = inputsFor(tab, state);
+    // torsion: list only the inputs that were sent (the drawn section, free-mode force and the legacy torque are not always used)
+    const shown = tab === "torsion" ? fields.filter((f) => f.name in values && f.name !== "torque") : fields;
+    const base = markdownReport({ tool, fields: shown, values, results: response.result.fields, system: units, version: schema.version, link: link() });
     const md = tab === "poles" ? `${base}${poleReportExtra(parsePoleResult(response.result.fields))}` : base;
     download(`${tool.id}.md`, md, "text/markdown");
   };
@@ -216,7 +220,7 @@ export function StructuralPage() {
         : tab === "beam"
           ? <BeamTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />
           : tab === "torsion"
-            ? <TorsionTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} />
+            ? <TorsionTab state={state} update={update} response={response} units={units} onEditSection={() => setTab("section")} onEditShear={() => setTab("shear")} />
             : tab === "poles"
               ? <PolesTab state={state} update={update} response={blocked ? null : response} stale={stale} blocked={blocked} />
               : <ShearFlowTab state={state} update={update} response={response} units={units} />}
@@ -643,67 +647,6 @@ function StressCard({ response, units }: { response: Extract<RunResponse, { ok: 
     </Card>
   );
 }
-
-// ---------------- torsion tab ----------------
-
-function TorsionTab({ state, update, response, units, onEditSection }: {
-  state: StructuralState; update: Update; response: RunResponse | null; units: UnitSystem; onEditSection: () => void;
-}) {
-  const t = state.torsion;
-  const setT = (p: Partial<StructuralState["torsion"]>) => update((s) => ({ torsion: { ...s.torsion, ...p } }));
-  const span = unitConv("m", units);
-  const torque = unitConv("N·m", units);
-  const stress = stressConv(units);
-  const err = torsionError(t);
-  const sectionName = state.section.shape === "profile" ? String(state.section.profile) : state.section.shape.replace(/_/g, " ");
-  const small = smallLength(units);
-  const r = response?.ok ? fieldMap(response.result.fields) : null;
-  const num = (n: string) => (typeof r?.[n]?.value === "number" ? (r[n].value as number) : null);
-  const chart = response?.ok ? response.charts.find((c) => c.id === "section") : undefined;
-  const twist = response?.ok ? response.charts.find((c) => c.id === "twist") : undefined;
-  const share = num("saint_venant_share");
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <Card title="Cantilever under end torque" aside={
-          <button type="button" className="text-xs text-primary-ink hover:underline" onClick={onEditSection}>
-            Section: <span className="font-medium capitalize">{sectionName}</span> · {state.material} (edit)
-          </button>}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <NumberInput label="Length L" value={t.length} conv={span} positive testId="field-torsion-length" onChange={(v) => setT({ length: v ?? 0 })} />
-            <NumberInput label="Torque T" value={t.torque} conv={torque} testId="field-torque" onChange={(v) => setT({ torque: v ?? 0 })} />
-            <NumberInput label="Evaluate at x" value={t.position} conv={span} min={0} testId="field-position" onChange={(v) => setT({ position: v ?? 0 })} />
-          </div>
-          {err && <p className="mt-2 text-xs text-fail" data-testid="torsion-error">{err}</p>}
-          <p className="mt-4 text-xs text-muted">
-            Fixed at x = 0, torque applied at x = L. Open sections (I, channel, T, Z, L) use warping torsion; closed and solid sections use Saint-Venant torsion.
-          </p>
-        </Card>
-
-        <Card title="Section">
-          {chart ? <SectionDrawing chart={chart} length={fmtWith(small)} /> : <p className="text-sm text-muted">The section appears here once Python is ready.</p>}
-        </Card>
-      </div>
-
-      {response && !response.ok && <ErrorBox message={response.error.message} />}
-      {response?.ok && (
-        <div className="space-y-6" data-testid="results">
-          <Card title="Torsion results">
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <Stat label="Twist at x" value={num("twist_deg") === null ? "—" : `${formatNumber(num("twist_deg")!)} °`} testId="result-twist_deg" />
-              <Stat label="Max shear stress τ" value={num("max_shear_stress") === null ? "—" : `${formatNumber(stress.fromSI(num("max_shear_stress")!))} ${stress.unit}`} testId="result-max_shear_stress" />
-              <Stat label="Warping parameter α" value={num("alpha") === null ? "—" : formatNumber(num("alpha")!)} testId="result-alpha" />
-              <Stat label="Saint-Venant share" value={share === null ? "—" : `${formatNumber(share * 100, 3)} %`} testId="result-saint_venant_share" />
-            </div>
-          </Card>
-          {twist && <div className="card p-3"><ChartView chart={twist} /></div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 // ---------------- pole plan tab ----------------
 

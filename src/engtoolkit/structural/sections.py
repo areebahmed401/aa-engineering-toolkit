@@ -31,6 +31,27 @@ def _circle(zc: float, yc: float, r: float, n: int = 72) -> list[Point]:
     return [(zc + r * math.cos(2 * math.pi * i / n), yc + r * math.sin(2 * math.pi * i / n)) for i in range(n)]
 
 
+def rect_torsion_eta(ratio: float, n_terms: int = 50) -> tuple[float, float]:
+    """
+    Saint-Venant factors of a solid rectangle B x H (B short side, ``ratio`` = H/B ≥ 1), formulary §3.1:
+    J_T = η1 B³ H / 3, W_T = η2 B² H / 3 (τ_max at the middle of the long side).
+
+    Exact series (Timoshenko & Goodier, Theory of Elasticity §109), sums over odd n:
+        η1 = 1 − (192/π⁵)(B/H) Σ tanh(nπH/2B)/n⁵
+        η2 = η1 / [1 − (8/π²) Σ 1/(n² cosh(nπH/2B))]
+    """
+    if ratio < 1:
+        ratio = 1 / ratio
+    s1 = s2 = 0.0
+    for k in range(n_terms):
+        n = 2 * k + 1
+        z = n * math.pi * ratio / 2
+        s1 += math.tanh(z) / n**5
+        s2 += 2 * math.exp(-z) / (1 + math.exp(-2 * z)) / n**2  # 1/cosh without overflow
+    eta1 = 1 - 192 / math.pi**5 / ratio * s1
+    return eta1, eta1 / (1 - 8 / math.pi**2 * s2)
+
+
 @dataclass
 class SectionProperties(Result):
     shape: str = rfield("", "Shape")
@@ -146,6 +167,19 @@ class CrossSection(ABC):
     def C_torsion(self) -> float:  # warping constant; ~0 for closed and solid sections
         return 0.0
 
+    def midline(self) -> tuple[list, list] | None:
+        """Thin-walled mid-line model (nodes [(x2, x3)], walls [(i, j, h)], x3 down) of open shapes, else None."""
+        return None
+
+    @property
+    def omega_max(self) -> float:
+        """Max |ω| of the principal sectorial coordinate [m²] (open shapes, from the mid-line model), else NaN."""
+        model = self.midline()
+        if model is None:
+            return math.nan
+        from .thin_walled import sectorial
+        return sectorial(*model).omega_max
+
     # Old spelling aliases for torsion properties
     @property
     def J_Torsion(self) -> float:
@@ -192,15 +226,15 @@ class Rectangle(CrossSection):
 
     @property
     def J_torsion(self):
-        # Saint-Venant torsion constant, a = long side, b = short side (Roark)
-        a, b = max(self.width, self.height), min(self.width, self.height)
-        return a * b**3 * (1/3 - 0.21 * (b/a) * (1 - b**4 / (12 * a**4)))
+        # Formulary §3.1: J_T = η1 B³ H / 3, B short side, H long side (exact Saint-Venant series)
+        H, B = max(self.width, self.height), min(self.width, self.height)
+        return rect_torsion_eta(H / B)[0] * B**3 * H / 3
 
     @property
     def W_torsion(self):
-        # Torsional section modulus, tau_max = T / W_t (Roark)
-        a, b = max(self.width, self.height), min(self.width, self.height)
-        return a * b**2 / (3 + 1.8 * b / a)
+        # Formulary §3.1: W_T = η2 B² H / 3, tau_max = T / W_T
+        H, B = max(self.width, self.height), min(self.width, self.height)
+        return rect_torsion_eta(H / B)[1] * B**2 * H / 3
 
     def outline(self):
         return {"outer": _rect(0, 0, self.width, self.height), "holes": []}
@@ -235,6 +269,44 @@ class Circle(CrossSection):
 
     def outline(self):
         return {"outer": _circle(self.radius, self.radius, self.radius), "holes": []}
+
+
+class Ellipse(CrossSection):
+    """Solid ellipse, semi-axis ``a`` horizontal and ``b`` vertical."""
+
+    def __init__(self, a: float, b: float):
+        self.a = a
+        self.b = b
+
+    height = property(lambda self: 2 * self.b)
+    width = property(lambda self: 2 * self.a)
+
+    @property
+    def area(self):
+        return math.pi * self.a * self.b
+
+    @property
+    def Iyy(self):
+        return math.pi * self.a * self.b**3 / 4
+
+    @property
+    def Izz(self):
+        return math.pi * self.a**3 * self.b / 4
+
+    @property
+    def J_torsion(self):
+        return math.pi * self.a**3 * self.b**3 / (self.a**2 + self.b**2)  # formulary §3.1
+
+    @property
+    def W_torsion(self):
+        # formulary §3.1: W_T = π a b² / 2 with b the smaller semi-axis (τ_max at the ends of the minor axis)
+        a, b = max(self.a, self.b), min(self.a, self.b)
+        return math.pi * a * b**2 / 2
+
+    def outline(self):
+        n = 72
+        return {"outer": [(self.a * (1 + math.cos(2 * math.pi * i / n)), self.b * (1 + math.sin(2 * math.pi * i / n)))
+                          for i in range(n)], "holes": []}
 
 
 class HollowCircle(CrossSection):
@@ -314,17 +386,36 @@ class RectangularTube(CrossSection):
         # Constant wall thickness and material: warping-free only when square
         return self.outer_width == self.outer_height
 
+    def thick_wall_torsion(self) -> dict:
+        """
+        Thick-walled hollow rectangle (formulary §3.1): common ϑ', J_T = J_TB + Σ J_Ti with J_TB Bredt on the
+        mid-line box and J_Ti each wall as a solid rectangle (h_i x l_i, l_i mid-line length, η1).
+        Torque split T_B = T J_TB/J_T, T_i = T J_Ti/J_T; τ_i,max = 3 T_i/(η2 h_i² l_i),
+        τ_Bi = T_B/(2 H B h_i) (H, B mid-line); τ_max = max_i(τ_Bi + τ_i,max), so W_T = T/τ_max.
+        """
+        t = self.wall_thickness
+        Bm, Hm = self.outer_width - t, self.outer_height - t
+        J_TB = 4 * (Bm * Hm)**2 * t / (2 * (Bm + Hm))
+        walls = []
+        for length in (Bm, Hm, Bm, Hm):
+            lo, hi = min(length, t), max(length, t)
+            eta1, eta2 = rect_torsion_eta(hi / lo)
+            walls.append({"l": length, "h": t, "eta1": eta1, "eta2": eta2,
+                          "J": eta1 * lo**3 * hi / 3, "W": eta2 * lo**2 * hi / 3})
+        J = J_TB + sum(w["J"] for w in walls)
+        tau = max(J_TB / J / (2 * Hm * Bm * w["h"]) + w["J"] / J / w["W"] for w in walls)  # per unit torque
+        return {"J_TB": J_TB, "J_walls": [w["J"] for w in walls], "J": J, "share_B": J_TB / J, "W": 1 / tau,
+                "walls": walls}
+
     @property
     def J_torsion(self):
-        # Bredt's second formula with constant wall thickness: 4 A_m^2 / (s / t)
-        t = self.wall_thickness
-        perimeter = 2 * ((self.outer_width - t) + (self.outer_height - t))
-        return 4 * self.A_enclosed**2 * t / perimeter
+        # Thick-walled hollow rectangle: Bredt on the mid-line box + the walls as solid rectangles
+        return self.thick_wall_torsion()["J"]
 
     @property
     def W_torsion(self):
-        # Bredt's first formula: tau_max = T / (2 A_m t_min)
-        return 2 * self.A_enclosed * self.wall_thickness
+        # tau_max = T / W_T: Bredt shear plus each wall's own Saint-Venant shear (→ 2 A_m t for thin walls)
+        return self.thick_wall_torsion()["W"]
 
     def outline(self):
         t = self.wall_thickness
@@ -399,6 +490,11 @@ class IBeam(_FlangedSection):
         h = self.wh + self.ft
         return self.Iy_flange * h**2 / 2
 
+    def midline(self):
+        b, h = self.fw / 2, self.wh + self.ft
+        nodes = [(-b, 0.0), (0.0, 0.0), (b, 0.0), (-b, h), (0.0, h), (b, h)]
+        return nodes, [(0, 1, self.ft), (1, 2, self.ft), (1, 4, self.wt), (3, 4, self.ft), (4, 5, self.ft)]
+
     def outline(self):
         fw, ft, wh, wt = self.fw, self.ft, self.wh, self.wt
         zw = (fw - wt) / 2
@@ -444,6 +540,11 @@ class TBeam(_FlangedSection):
     @property
     def J_torsion(self):
         return (self.fw * self.ft**3 + self.wh * self.wt**3) * 1.12 / 3
+
+    def midline(self):  # flange on top (x3 = 0, x3 down)
+        b = self.fw / 2
+        nodes = [(-b, 0.0), (0.0, 0.0), (b, 0.0), (0.0, self.wh + self.ft / 2)]
+        return nodes, [(0, 1, self.ft), (1, 2, self.ft), (1, 3, self.wt)]
 
     @property
     def W_torsion(self):
@@ -507,6 +608,10 @@ class CBeam(_FlangedSection):
         Af, Aw = b * self.ft, h * self.wt
         return h**2 * b**2 * Af * (1/6 - Af / (8 * Af + 4/3 * Aw))
 
+    def midline(self):  # web on the left, flanges to the right
+        b, h = self.fw - self.wt / 2, self.wh + self.ft
+        return [(b, 0.0), (0.0, 0.0), (0.0, h), (b, h)], [(0, 1, self.ft), (1, 2, self.wt), (2, 3, self.ft)]
+
     def outline(self):
         H = self.height
         return {"outer": [(0, 0), (self.fw, 0), (self.fw, self.ft), (self.wt, self.ft), (self.wt, H - self.ft),
@@ -560,6 +665,10 @@ class ZBeam(_FlangedSection):
         h = self.wh + self.ft
         Af, Aw = b * self.ft, h * self.wt
         return h**2 * b**2 * Af * (1/6 - Af / (8 * Af + 4 * Aw))
+
+    def midline(self):  # top flange to the right, bottom flange to the left (x3 down)
+        b, h = self.fw - self.wt / 2, self.wh + self.ft
+        return [(b, 0.0), (0.0, 0.0), (0.0, h), (-b, h)], [(0, 1, self.ft), (1, 2, self.wt), (2, 3, self.ft)]
 
     def outline(self):
         z0 = self.fw - self.wt  # web left edge
@@ -619,7 +728,13 @@ class LBeam(CrossSection):
 
     @property
     def J_torsion(self):
-        return (2 * self.leg_length - self.leg_thickness) * self.leg_thickness**3 / 3
+        # Open thin-walled η3/3 Σ h³ l with η3 = 0.99 for angles (formulary §3.1)
+        return 0.99 * (2 * self.leg_length - self.leg_thickness) * self.leg_thickness**3 / 3
+
+    def midline(self):  # corner at the leg mid-line intersection, legs along +x2 and up (−x3)
+        a = self.leg_length - self.leg_thickness / 2
+        t = self.leg_thickness
+        return [(a, 0.0), (0.0, 0.0), (0.0, -a)], [(0, 1, t), (1, 2, t)]
 
     @property
     def W_torsion(self):
