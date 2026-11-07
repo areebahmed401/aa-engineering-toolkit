@@ -57,6 +57,14 @@
   .btn-ghost {
     @apply btn border border-border bg-surface text-ink hover:bg-bg;
   }
+  /* Thin dark edge so the logo gold reads on white; off in dark mode where gold already contrasts. */
+  .aa-outline {
+    -webkit-text-stroke: 1.5px rgb(var(--ink));
+    paint-order: stroke fill;
+  }
+  .dark .aa-outline {
+    -webkit-text-stroke: 0;
+  }
   .brand-gradient {
     background-image: linear-gradient(135deg, #f2b705, #c99400);
   }
